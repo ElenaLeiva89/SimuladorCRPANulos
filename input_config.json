@@ -1,0 +1,38 @@
+{
+  "simulation_config": {
+    "nsimulations": 1e4,
+    "gnssBand": 3,  
+    "maxPhaseNoise_deg": 2.0,
+    "maxAmplNoise_dB": 0.5,
+    "interferenceType": [1],
+    "algorithmType": "lcmv"
+  },
+  "scenario_config": {
+    "speed_of_light_m_s": 299792458.0,
+    "num_elements": 7,
+    "element_spacing_over_lambda": 0.5,
+    "num_snapshots": 4096,
+    "noise_power_linear": 1.0,
+    "desired_azimuth_deg": 0.0,
+    "desired_elevation_deg": 0.0,
+    "azimuth_scan_min_deg": -180.0,
+    "azimuth_scan_max_deg": 180.0,
+    "azimuth_scan_step_deg": 0.25,
+    "fixed_azimuth_cut_deg": 0.0,
+    "elevation_scan_min_deg": -90.0,
+    "elevation_scan_max_deg": 90.0,
+    "elevation_scan_step_deg": 1.0,
+    "random_seed": 12345,
+    "output_dir": "results_crpa_7elem_basic"
+  },
+  "jammer_list": [
+    {
+      "name": "Jammer_1",
+      "azimuth_deg": 40.0,
+      "elevation_deg": 10.0,
+      "jnr_dB": 30.0,
+      "signal_type": "tone",
+      "normalized_frequency": 0.05
+    }
+  ]
+}
