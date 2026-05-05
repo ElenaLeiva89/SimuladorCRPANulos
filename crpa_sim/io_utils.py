@@ -1,4 +1,6 @@
-"""io_utils.py: carga/guardado de configuración, tablas, matrices y logs."""
+"""io_utils.py
+Carga de configuración, guardado de tablas, matrices y logs.
+"""
 
 from __future__ import annotations
 
@@ -9,108 +11,103 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import JammerConfig, ScenarioConfig, SimulationConfig
+from .config import (
+    ArrayConfig,
+    BeamformingConfig,
+    JammerConfig,
+    NoiseConfig,
+    OutputConfig,
+    ProjectConfig,
+    ScanConfig,
+    SignalConfig,
+    SimulationConfig,
+)
 
-# Crea el directorio de salida si no existe y devuelve el Path resultante.
-    # Parameters
-    # ----------
-    # output_dir:
-    #     Ruta del directorio de salida.
 
-    # Returns
-    # -------
-    # Path
-    #     Objeto Path del directorio creado o existente.
 def ensure_output_dir(output_dir: str | Path) -> Path:
     path = Path(output_dir)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
-# Lee el JSON de configuración y crea los objetos SimulationConfig, ScenarioConfig y JammerConfig.
-    # El archivo debe tener las claves:
-    # - simulation_config
-    # - scenario_config
-    # - jammer_list
 
-    # Returns
-    # -------
-    # tuple[SimulationConfig, ScenarioConfig, list[JammerConfig]]
-    #     Objetos construidos a partir del JSON.
-def load_configuration_file(config_path: Path) -> tuple[SimulationConfig, ScenarioConfig, list[JammerConfig]]:
-    with open(config_path, "r", encoding="utf-8") as file:
-        raw = json.load(file)
-
-    simulation = SimulationConfig.from_dict(raw.get("simulation_config", {}))
-    scenario = ScenarioConfig.from_dict(raw.get("scenario_config", {}))
-    jammers = [JammerConfig.from_dict(item) for item in raw.get("jammer_list", [])]
-
-    if scenario.carrier_frequency_hz is None:
-        scenario.set_carrier_frequency_from_simulation(simulation)
-
-    return simulation, scenario, jammers
-
-# Valida que exista el fichero de configuración e invoca la carga de parámetros.
-    # Parameters
-    # ----------
-    # config_path:
-    #     Ruta al archivo de configuración JSON.
-def load_simulation_parameters(config_path: Path) -> tuple[SimulationConfig, ScenarioConfig, list[JammerConfig]]:
+def load_project_config(config_path: str | Path) -> ProjectConfig:
+    config_path = Path(config_path)
     if not config_path.exists():
-        raise FileNotFoundError(f"No se encontró {config_path}")
-    print(f"Cargando configuración desde: {config_path}")
-    return load_configuration_file(config_path)
+        raise FileNotFoundError(f"No se encontró el fichero de configuración: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
 
-# Guarda matrices complejas en formato comprimido npz.
-    # Parameters
-    # ----------
-    # output_path:
-    #     Ruta del archivo de salida .npz.  
-def save_complex_npz(output_path: Path, **arrays: np.ndarray) -> None:
-    np.savez_compressed(output_path, **arrays)
+    config = ProjectConfig(
+        array=ArrayConfig.from_dict(raw["array_config"]),
+        signal=SignalConfig.from_dict(raw["signal_config"]),
+        simulation=SimulationConfig.from_dict(raw["simulation_config"]),
+        beamforming=BeamformingConfig.from_dict(raw["beamforming_config"]),
+        scan=ScanConfig.from_dict(raw["scan_config"]),
+        noise=NoiseConfig.from_dict(raw["noise_config"]),
+        jammer=JammerConfig.from_dict(raw["jammer_config"]),
+        output=OutputConfig.from_dict(raw["output_config"]),
+    )
+    validate_project_config(config)
+    return config
 
-# Escribe un log de ejecución con los parámetros de simulación y el directorio de salida.
-    # Parameters
-    # ----------
-    # simulation:
-    #     Configuración de la simulación.
-    # config:
-    #     Configuración del escenario.
-    # output_dir:
-    #     Carpeta donde se escribe el log.
-    # num_jammers:
-    #     Número de jammers incluidos en la simulación.
-    # null_depth_rows:
-    #     Lista de diccionarios con métricas de profundidad de nulo por jammer. 
-def save_run_log(
-    simulation: SimulationConfig,
-    scenario: ScenarioConfig,
-    output_dir: Path,
-    num_jammers: int,
-    null_depth_rows: list[dict],
-) -> None:
-    with open(output_dir / "run_log.txt", "w", encoding="utf-8") as file:
-        file.write("SIMULACIÓN CRPA 7 ELEMENTOS\n")
-        file.write("==========================\n\n")
-        file.write(f"Banda GNSS: {simulation.band_label}\n")
-        file.write(f"Algoritmo: {simulation.algorithmType}\n")
-        file.write(f"Frecuencia portadora Hz: {scenario.carrier_frequency_hz}\n")
-        file.write(f"Longitud de onda m: {scenario.wavelength_m}\n")
-        file.write(f"Separación radial m: {scenario.element_spacing_m}\n")
-        file.write(f"Elementos: {scenario.num_elements}\n")
-        file.write(f"Snapshots: {scenario.num_snapshots}\n")
-        file.write(f"Potencia ruido lineal: {scenario.noise_power_linear}\n")
-        file.write(f"Jammers: {num_jammers}\n")
-        file.write(f"Directorio salida: {output_dir}\n\n")
-        file.write("Profundidades de nulo / ganancia en jammer:\n")
-        for row in null_depth_rows:
-            file.write(f"- {row}\n")
 
-# Imprime en consola la lista de archivos generados en el directorio de salida.
+def validate_project_config(config: ProjectConfig) -> None:
+    if config.array.num_elements != 7 or config.array.geometry != "hexagonal_7":
+        raise ValueError("Esta versión implementa una CRPA hexagonal de 7 elementos.")
+    if config.jammer.num_jammers < 1:
+        raise ValueError("num_jammers debe ser >= 1.")
+    if config.jammer.num_jammers > config.array.num_elements - 1:
+        raise ValueError("num_jammers debe ser <= num_elements - 1.")
+    if config.jammer.num_jammers > len(config.jammer.base_jammers):
+        raise ValueError("num_jammers supera el número de base_jammers definidos.")
+    if abs(config.array.array_boresight_elevation_deg - 90.0) > 1e-9:
+        raise ValueError("Para este ejercicio la CRPA ideal debe apuntar al cenit: array_boresight_elevation_deg=90.")
+
+
+def save_config_used(config: ProjectConfig, output_dir: Path) -> None:
+    with open(output_dir / "config_used.json", "w", encoding="utf-8") as f:
+        json.dump(asdict(config), f, indent=4)
+
+
+def save_dataframe(df: pd.DataFrame, path: Path, sep: str = ";", decimal: str = ",") -> None:
+    df.to_csv(path, index=False, sep=sep, decimal=decimal)
+
+
+def save_complex_npz(path: Path, **arrays: np.ndarray) -> None:
+    np.savez_compressed(path, **arrays)
+
+
+def save_run_log(config: ProjectConfig, output_dir: Path, extra_rows: list[dict] | None = None) -> None:
+    with open(output_dir / "run_log.txt", "w", encoding="utf-8") as f:
+        f.write("SIMULACIÓN CRPA NULLFORMING / BEAMFORMING\n")
+        f.write("========================================\n\n")
+        f.write(f"Elementos CRPA: {config.array.num_elements}\n")
+        f.write(f"Geometría: {config.array.geometry}\n")
+        f.write(f"Tipo elemento: {config.array.element_type}\n")
+        f.write(f"Modelo steering: {config.array.steering_model}\n")
+        f.write(f"Boresight elevación: {config.array.array_boresight_elevation_deg} deg\n")
+        f.write(f"Banda GNSS: {config.signal.band_label}\n")
+        f.write(f"Frecuencia portadora: {config.signal.carrier_frequency_hz} Hz\n")
+        f.write(f"Longitud de onda: {config.signal.wavelength_m} m\n")
+        f.write(f"Separación radial: {config.element_spacing_m} m\n")
+        f.write(f"Sample rate: {config.signal.sample_rate_hz} Hz\n")
+        f.write(f"Snapshots: {config.signal.num_snapshots}\n")
+        f.write(f"FFT size: {config.signal.fft_size}\n")
+        f.write(f"Monte Carlo: {config.simulation.num_montecarlo}\n")
+        f.write(f"DoA mode: {config.simulation.doa_mode}\n")
+        f.write(f"Algoritmo: {config.beamforming.algorithm}\n")
+        f.write(f"Dirección deseada: az={config.beamforming.desired_azimuth_deg} deg, el={config.beamforming.desired_elevation_deg} deg\n")
+        f.write(f"Num jammers: {config.jammer.num_jammers}\n")
+        f.write(f"JNR: {config.jammer.jnr_dB} dB\n")
+        f.write(f"Umbrales nulo: {config.scan.null_thresholds_dB}\n")
+        f.write(f"Directorio salida: {output_dir}\n\n")
+        if extra_rows:
+            f.write("Resumen adicional:\n")
+            for row in extra_rows:
+                f.write(f"- {row}\n")
+
+
 def print_generated_files(output_dir: Path) -> None:
     print("\nFicheros generados:")
-    for file_path in sorted(output_dir.iterdir()):
-        print(f"  - {file_path.name}")
-
-# Guarda un DataFrame en CSV con formato específico (sin índice, separador ';', decimal ',').
-def save_dataframe(df: pd.DataFrame, output_path: Path) -> None:
-    df.to_csv(output_path, index=False, sep=";", decimal=",",)
+    for p in sorted(output_dir.iterdir()):
+        print(f"  - {p.name}")

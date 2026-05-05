@@ -1,38 +1,63 @@
 {
-  "simulation_config": {
-    "nsimulations": 1e4,
-    "gnssBand": 3,  
-    "maxPhaseNoise_deg": 2.0,
-    "maxAmplNoise_dB": 0.5,
-    "interferenceType": [1],
-    "algorithmType": "lcmv"
-  },
-  "scenario_config": {
-    "speed_of_light_m_s": 299792458.0,
+  "array_config": {
     "num_elements": 7,
+    "geometry": "hexagonal_7",
+    "element_type": "isotropic",
     "element_spacing_over_lambda": 0.5,
+    "array_boresight_elevation_deg": 90.0,
+    "steering_model": "ideal"
+  },
+  "signal_config": {
+    "gnss_band": "E1",
+    "speed_of_light_m_s": 299792458.0,
+    "sample_rate_hz": 64000000.0,
     "num_snapshots": 4096,
-    "noise_power_linear": 1.0,
+    "fft_size": 8192
+  },
+  "simulation_config": {
+    "num_montecarlo": 20,
+    "random_seed": 12345,
+    "doa_mode": "fixed"
+  },
+  "beamforming_config": {
+    "algorithm": "lcmv",
     "desired_azimuth_deg": 0.0,
     "desired_elevation_deg": 90.0,
+    "diagonal_loading_factor": 0.001,
+    "power_inversion_reference_element": 0
+  },
+  "scan_config": {
     "azimuth_scan_min_deg": -180.0,
     "azimuth_scan_max_deg": 180.0,
-    "azimuth_scan_step_deg": 0.25,
-    "fixed_azimuth_cut_deg": 0.0,
-    "elevation_scan_min_deg": -90.0,
+    "azimuth_scan_step_deg": 0.5,
+    "elevation_scan_min_deg": 0.0,
     "elevation_scan_max_deg": 90.0,
-    "elevation_scan_step_deg": 1.0,
-    "random_seed": 12345,
-    "output_dir": "results_crpa_7elem_basic"
+    "elevation_scan_step_deg": 0.5,
+    "null_thresholds_dB": [-10, -20, -30, -40, -50]
   },
-  "jammer_list": [
-    {
-      "name": "Jammer_1",
-      "azimuth_deg": 40.0,
-      "elevation_deg": 10.0,
-      "jnr_dB": 30.0,
-      "signal_type": "tone",
-      "normalized_frequency": 0.05
-    }
-  ]
+  "noise_config": {
+    "noise_power_linear": 1.0
+  },
+  "jammer_config": {
+    "num_jammers": 1,
+    "jnr_dB": 40.0,
+    "variable_doa_azimuth_range_deg": [-180.0, 180.0],
+    "variable_doa_elevation_range_deg": [5.0, 85.0],
+    "base_jammers": [
+      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.05},
+      {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11},
+      {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00},
+      {"name": "Jammer_4", "azimuth_deg": -90.0, "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.17},
+      {"name": "Jammer_5", "azimuth_deg": 140.0, "elevation_deg": 45.0, "signal_type": "tone", "normalized_frequency": 0.00},
+      {"name": "Jammer_6", "azimuth_deg": -150.0,"elevation_deg": 60.0, "signal_type": "tone", "normalized_frequency": 0.23}
+    ]
+  },
+  "output_config": {
+    "output_dir": "results_crpa_nullforming",
+    "save_csv": false,
+    "save_npz": false,
+    "save_plots": true,
+    "csv_separator": ";",
+    "csv_decimal": ","
+  }
 }

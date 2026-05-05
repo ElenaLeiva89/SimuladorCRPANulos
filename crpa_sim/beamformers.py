@@ -1,11 +1,5 @@
-"""
-beamformers.py
---------------
-Algoritmos de cálculo de pesos.
-
-Importante:
-- Aquí se calculan los pesos w.
-- Los patrones se calculan después como w^H a(az,el), no directamente desde X.
+"""beamformers.py
+Algoritmos Power Inversion y LCMV.
 """
 
 from __future__ import annotations
@@ -14,116 +8,74 @@ from typing import Sequence
 
 import numpy as np
 
-from .config import JammerConfig, ScenarioConfig
-from .crpa_array import conventional_steering_weights, steering_vector_ideal
-from .covariance import add_diagonal_loading, compute_sample_covariance
+from .array_model import steering_vector
+from .config import JammerInstance, ProjectConfig
+from .covariance import compute_sample_covariance, invert_covariance
+from .patterns import conventional_weights
 
 
-def compute_power_inversion_weights(
-    snapshot_matrix: np.ndarray,
-    reference_vector: np.ndarray | None = None,
-    diagonal_loading_factor: float = 1e-3,
-) -> np.ndarray:
-    """Power Inversion/Sidelobe Canceller básico.
-
-    Usa w = R^-1 c / (c^H R^-1 c), con c como restricción de referencia.
-    Por defecto c=[1,0,0,...]^T, manteniendo el elemento 0 como referencia.
-    """
+def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
+    """Power Inversion básico: w = R^-1 c / (c^H R^-1 c)."""
     num_elements = snapshot_matrix.shape[0]
+    ref_idx = config.beamforming.power_inversion_reference_element
+    if not (0 <= ref_idx < num_elements):
+        raise ValueError("power_inversion_reference_element fuera de rango.")
+
     R = compute_sample_covariance(snapshot_matrix)
-    R_loaded = add_diagonal_loading(R, diagonal_loading_factor)
+    R_inv = invert_covariance(R, config.beamforming.diagonal_loading_factor)
 
-    if reference_vector is None:
-        c = np.zeros(num_elements, dtype=complex)
-        c[0] = 1.0
-    else:
-        c = np.asarray(reference_vector, dtype=complex)
-
-    R_inv_c = np.linalg.pinv(R_loaded) @ c
-    denominator = np.vdot(c, R_inv_c)  # c^H R^-1 c
-    return R_inv_c / (denominator + 1e-15)
+    c = np.zeros(num_elements, dtype=complex)
+    c[ref_idx] = 1.0 + 0.0j
+    numerator = R_inv @ c
+    denominator = np.vdot(c, numerator)
+    return numerator / (denominator + 1e-15)
 
 
 def compute_lcmv_weights(
+    config: ProjectConfig,
     snapshot_matrix: np.ndarray,
     element_positions_m: np.ndarray,
-    config: ScenarioConfig,
-    jammer_list: Sequence[JammerConfig],
-    include_hard_nulls: bool = True,
+    jammer_list: Sequence[JammerInstance],
 ) -> np.ndarray:
-    """LCMV real: w = R^-1 C (C^H R^-1 C)^-1 f.
+    """LCMV: w = R^-1 C (C^H R^-1 C)^-1 f."""
+    if len(jammer_list) > config.array.num_elements - 1:
+        raise ValueError("LCMV: número de jammers supera num_elements - 1.")
 
-    Restricciones implementadas:
-    - primera columna de C: dirección deseada, f=1;
-    - columnas siguientes: direcciones jammer, f=0, si include_hard_nulls=True.
-
-    Con 7 elementos, no conviene imponer más de 7 restricciones en total.
-    """
     R = compute_sample_covariance(snapshot_matrix)
-    R_loaded = add_diagonal_loading(R, config.diagonal_loading_factor)
-    R_inv = np.linalg.pinv(R_loaded)
+    R_inv = invert_covariance(R, config.beamforming.diagonal_loading_factor)
 
     steering_vectors = [
-        steering_vector_ideal(
+        steering_vector(
+            config,
             element_positions_m,
-            config.desired_azimuth_deg,
-            config.desired_elevation_deg,
-            config.wavelength_m,
+            config.beamforming.desired_azimuth_deg,
+            config.beamforming.desired_elevation_deg,
         )
     ]
     desired_response = [1.0 + 0.0j]
 
-    if include_hard_nulls:
-        for jammer in jammer_list:
-            steering_vectors.append(
-                steering_vector_ideal(
-                    element_positions_m,
-                    jammer.azimuth_deg,
-                    jammer.elevation_deg,
-                    config.wavelength_m,
-                )
-            )
-            desired_response.append(0.0 + 0.0j)
+    for jammer in jammer_list:
+        steering_vectors.append(steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))
+        desired_response.append(0.0 + 0.0j)
 
-    C = np.column_stack(steering_vectors)  # N x K
-    f = np.asarray(desired_response, dtype=complex)  # K
-
+    C = np.column_stack(steering_vectors)
+    f = np.asarray(desired_response, dtype=complex)
     middle = C.conj().T @ R_inv @ C
-    w = R_inv @ C @ np.linalg.pinv(middle) @ f
-    return w
+    return R_inv @ C @ np.linalg.pinv(middle) @ f
 
 
 def compute_weights(
-    algorithm_type: str,
+    config: ProjectConfig,
     snapshot_matrix: np.ndarray,
     element_positions_m: np.ndarray,
-    config: ScenarioConfig,
-    jammer_list: Sequence[JammerConfig],
+    jammer_list: Sequence[JammerInstance],
 ) -> np.ndarray:
-    """Selector único de algoritmo."""
-    algorithm = algorithm_type.lower()
-
-    if algorithm == "conventional":
-        return conventional_steering_weights(
-            element_positions_m,
-            config.desired_azimuth_deg,
-            config.desired_elevation_deg,
-            config.wavelength_m,
-        )
-
+    """Selector único de pesos según config.beamforming.algorithm."""
+    algorithm = config.beamforming.algorithm.lower()
     if algorithm == "power_inversion":
-        return compute_power_inversion_weights(
-            snapshot_matrix,
-            diagonal_loading_factor=config.diagonal_loading_factor,
-        )
-
-    if algorithm in {"lcmv", "lcmw"}:
-        return compute_lcmv_weights(
-            snapshot_matrix,
-            element_positions_m,
-            config,
-            jammer_list,
-            include_hard_nulls=True,
-        )
-
-    raise ValueError(f"algorithmType no soportado: {algorithm_type}")
+        return compute_power_inversion_weights(config, snapshot_matrix)
+    if algorithm == "lcmv":
+        return compute_lcmv_weights(config, snapshot_matrix, element_positions_m, jammer_list)
+    if algorithm == "conventional":
+        return conventional_weights(config, element_positions_m)
+    raise ValueError(f"Algoritmo no soportado: {algorithm}")

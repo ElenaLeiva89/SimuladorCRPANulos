@@ -1,69 +1,125 @@
-Simulación CRPA de 7 elementos con jammers, ruido y pesos conventional/LCMV/power_inversion.
+# Simulador CRPA ideal de 7 elementos para Nullforming/Beamforming
 
-Ejecución:
-  pip install numpy pandas matplotlib
-  python main.py
+Versión limpia y conservadora del simulador.
 
-Ficheros principales:
-  main.py                         Punto de entrada.
-  input_config.json               Configuración editable.
-  crpa_sim/config.py              Dataclasses y bandas GNSS.
-  crpa_sim/crpa_array.py          Geometría, steering vector y patrones.
-  crpa_sim/covariance.py          Covarianza espacial, carga diagonal e inversión estable.
-  crpa_sim/jammers.py             Ruido e interferencias.
-  crpa_sim/beamformers.py         Pesos conventional, LCMV y Power Inversion.
-  crpa_sim/fft_tools.py           FFT temporal y FFT espacial ULA opcional.
-  crpa_sim/plots.py               Figuras.
-  crpa_sim/io_utils.py            Guardado/carga/logs.
+## Qué hace
 
-Nota sobre FFT:
-  - La FFT temporal se aplica a snapshot_matrix sobre el eje temporal para ver tonos o espectro.
-  - La FFT espacial 1D solo es directa para arrays lineales uniformes ULA.
-  - Para la CRPA hexagonal 2D, el patrón principal debe calcularse con barrido angular: B=w^H a(az,el).
+- Simula una CRPA ideal hexagonal de 7 elementos, orientada al cenit.
+- Genera jammers y ruido térmico no coherente.
+- Ejecuta **un único modo DoA por ejecución**: `fixed` o `variable`.
+- Ejecuta **un único algoritmo por ejecución**: `power_inversion` o `lcmv`.
+- Genera logs y ficheros de salida similares a la versión anterior.
+- Genera plots globales y plots por jammer.
+- Genera un CSV final con profundidad y anchuras de nulo por jammer y umbral.
 
-## Formato de `input_config.json`
+## Ejecución
 
-El fichero debe contener tres secciones principales:
+```bash
+pip install numpy pandas matplotlib
+python main.py
+```
 
-- `simulation_config`: parámetros de la simulación global.
-- `scenario_config`: parámetros de la CRPA y del barrido.
-- `jammer_list`: lista de jammers a simular.
+## Configuración principal
 
-### simulation_config
+En `input_config.json`:
 
-- `nsimulations`: Número de iteraciones de Monte Carlo. Ejemplo: `10000`.
-- `gnssBand`: Banda GNSS. Puede ser un número `1`, `2`, `3`, o la etiqueta `"E5"`, `"E6"`, `"E1"`.
-- `maxPhaseNoise_deg`: Ruido de fase máximo en grados.
-- `maxAmplNoise_dB`: Ruido de amplitud máximo en dB.
-- `interferenceType`: Lista de tipos de interferencia. Actualmente sólo se usa como etiqueta interna, por ejemplo `[1]`.
-- `algorithmType`: Tipo de algoritmo a aplicar para calculo de los pesos. Puede ser "conventional", "LCMW", "power_inversion". 
+```json
+"simulation_config": {
+  "num_montecarlo": 20,
+  "random_seed": 12345,
+  "doa_mode": "fixed"
+}
+```
 
-### scenario_config
+`doa_mode` solo acepta:
 
-- `speed_of_light_m_s`: Velocidad de la luz en m/s. Normalmente `299792458.0`.
-- `num_elements`: Número de elementos de la CRPA. Debe ser `7` para este proyecto.
-- `element_spacing_over_lambda`: Separación radial exterior en longitudes de onda.
-- `num_snapshots`: Número de snapshots temporales.
-- `noise_power_linear`: Potencia de ruido lineal por elemento.
-- `desired_azimuth_deg`: Azimut deseado del haz principal en grados.
-- `desired_elevation_deg`: Elevación deseada del haz principal en grados.
-- `azimuth_scan_min_deg`: Ángulo mínimo del barrido de azimut.
-- `azimuth_scan_max_deg`: Ángulo máximo del barrido de azimut.
-- `azimuth_scan_step_deg`: Paso del barrido de azimut.
-- `fixed_azimuth_cut_deg`: Azimut fijo para el corte de elevación.
-- `elevation_scan_min_deg`: Elevación mínima del barrido.
-- `elevation_scan_max_deg`: Elevación máxima del barrido.
-- `elevation_scan_step_deg`: Paso del barrido de elevación.
-- `random_seed`: Semilla aleatoria para reproducibilidad.
-- `output_dir`: Carpeta de salida.
+- `fixed`
+- `variable`
 
-### jammer_list
+```json
+"beamforming_config": {
+  "algorithm": "lcmv"
+}
+```
 
-Cada elemento de la lista define un jammer:
+`algorithm` solo acepta:
 
-- `name`: Nombre identificador.
-- `azimuth_deg`: Azimut de llegada del jammer en grados.
-- `elevation_deg`: Elevación de llegada del jammer en grados.
-- `jnr_dB`: Jamming-to-noise ratio en dB.
-- `signal_type`: Tipo de señal. Puede ser `"complex_gaussian"` o `"tone"`.
-- `normalized_frequency`: Frecuencia normalizada para señales de tipo `tone`.
+- `lcmv`
+- `power_inversion`
+
+El número de jammers se controla aquí:
+
+```json
+"jammer_config": {
+  "num_jammers": 3,
+  "jnr_dB": 40.0
+}
+```
+
+`num_jammers` debe ser `1 <= num_jammers <= num_elements - 1`.
+
+## Salidas principales
+
+En `results_crpa_nullforming/`:
+
+- `run_log.txt`
+- `config_used.json`
+- `element_positions_m.csv`
+- `jammer_table.csv`
+- `matrices_complex.npz`
+- `null_metrics_by_jammer.csv`
+- `null_metrics_summary.csv`
+- `pattern_global_azimuth_dB.png`
+- `pattern_global_elevation_dB.png`
+- `array_factor_heatmap.png`
+- `pattern_3d_comparison.png`
+- `temporal_fft_snapshot_spectrum.csv`
+- `temporal_fft_snapshot_spectrum.png`
+- `jammer_cuts/`
+- `jammer_plots/`
+
+## Plots por jammer
+
+Para cada jammer se genera:
+
+```text
+jammer_plots/jammer_X_NAME/
+  pattern_azimuth_dB.png
+  pattern_elevation_dB.png
+  array_factor_heatmap.png
+  pattern_3d_comparison.png
+```
+
+Los cortes por jammer atraviesan el nulo:
+
+- corte de azimut con elevación fija igual a la elevación del jammer;
+- corte de elevación con azimut fijo igual al azimut del jammer.
+
+## CSV de métricas
+
+`null_metrics_by_jammer.csv` contiene:
+
+- `montecarlo_index`
+- `algorithm`
+- `doa_mode`
+- `num_jammers`
+- `jammer_index`
+- `jammer_name`
+- `jammer_azimuth_deg`
+- `jammer_elevation_deg`
+- `jammer_jnr_dB`
+- `jammer_signal_type`
+- `null_depth_dB`
+- `attenuation_threshold_dB`
+- `null_width_azimuth_deg`
+- `null_width_elevation_deg`
+
+## Sustitución futura por CRPA real
+
+El punto de sustitución está en:
+
+```text
+crpa_sim/array_model.py -> steering_vector()
+```
+
+Actualmente `steering_model = "ideal"`.

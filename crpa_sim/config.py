@@ -1,139 +1,213 @@
-"""
-config.py
----------
-Dataclasses de configuración del simulador CRPA.
+"""config.py
+Configuración tipada del simulador CRPA.
 
-Este módulo NO ejecuta simulaciones. Solo define:
-- parámetros globales de simulación,
-- parámetros físicos/geométricos del escenario,
-- parámetros de cada jammer.
+La versión limpia usa un único modo DoA y un único algoritmo por ejecución:
+- simulation_config.doa_mode: "fixed" o "variable"
+- beamforming_config.algorithm: "power_inversion" o "lcmv"
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-GNSS_BAND_LABELS = {1: "E5", 2: "E6", 3: "E1"}
 GNSS_CARRIER_FREQUENCIES_HZ = {"E5": 1.19179e9, "E6": 1.27875e9, "E1": 1.57542e9}
+GNSS_BAND_LABELS = {1: "E5", 2: "E6", 3: "E1"}
+VALID_DOA_MODES = {"fixed", "variable"}
+VALID_ALGORITHMS = {"power_inversion", "lcmv"}
 
 
-def normalize_gnss_band(value: Any) -> str:
-    """Convierte 1/2/3 o 'E5'/'E6'/'E1' a una etiqueta estándar."""
+def normalize_gnss_band(value: int | str) -> str:
     if isinstance(value, int):
         return GNSS_BAND_LABELS.get(value, str(value))
     return str(value).strip().upper()
 
 
-@dataclass
-class SimulationConfig:
-    """Configuración general de ejecución.
+@dataclass(frozen=True)
+class ArrayConfig:
+    num_elements: int
+    geometry: str
+    element_type: str
+    element_spacing_over_lambda: float
+    array_boresight_elevation_deg: float
+    steering_model: str = "ideal"
 
-    nsimulations:
-        Número de iteraciones Monte Carlo. En esta fase básica se carga,
-        pero main.py ejecuta una única simulación. Se usará más adelante.
-    gnssBand:
-        Banda GNSS: 1=E5, 2=E6, 3=E1 o etiqueta "E5", "E6", "E1".
-    maxPhaseNoise_deg:
-        Ruido de fase máximo previsto para fases futuras.
-    maxAmplNoise_dB:
-        Ruido de amplitud máximo previsto para fases futuras.
-    interferenceType:
-        Lista de etiquetas/tipos de interferencia.
-    algorithmType:
-        Algoritmo de pesos: "conventional", "lcmv", "power_inversion".
-    use_fft_pattern_for_ula:
-        Si True, permite calcular un patrón rápido por FFT SOLO para ULA.
-        Para la CRPA hexagonal 2D debe mantenerse False.
-    """
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "ArrayConfig":
+        values = dict(values)
+        values["num_elements"] = int(values["num_elements"])
+        values["geometry"] = str(values["geometry"]).lower()
+        values["element_type"] = str(values["element_type"]).lower()
+        values["steering_model"] = str(values.get("steering_model", "ideal")).lower()
+        return cls(**values)
 
-    nsimulations: int
-    gnssBand: int | str
-    maxPhaseNoise_deg: float
-    maxAmplNoise_dB: float
-    interferenceType: list[int]
-    algorithmType: str = "conventional"
-    use_fft_pattern_for_ula: bool = False
-    numberInterferences: int = field(init=False)
 
-    def __post_init__(self) -> None:
-        self.numberInterferences = len(self.interferenceType)
-        self.algorithmType = self.algorithmType.lower()
+@dataclass(frozen=True)
+class SignalConfig:
+    gnss_band: int | str
+    speed_of_light_m_s: float
+    sample_rate_hz: float
+    num_snapshots: int
+    fft_size: int | None = None
 
     @property
     def band_label(self) -> str:
-        return normalize_gnss_band(self.gnssBand)
+        return normalize_gnss_band(self.gnss_band)
+
+    @property
+    def carrier_frequency_hz(self) -> float:
+        label = self.band_label
+        if label not in GNSS_CARRIER_FREQUENCIES_HZ:
+            raise ValueError(f"Banda GNSS no soportada: {self.gnss_band}")
+        return GNSS_CARRIER_FREQUENCIES_HZ[label]
+
+    @property
+    def wavelength_m(self) -> float:
+        return self.speed_of_light_m_s / self.carrier_frequency_hz
+
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "SignalConfig":
+        values = dict(values)
+        values["num_snapshots"] = int(values["num_snapshots"])
+        if values.get("fft_size") is not None:
+            values["fft_size"] = int(values["fft_size"])
+        return cls(**values)
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    num_montecarlo: int
+    random_seed: int
+    doa_mode: str
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "SimulationConfig":
         values = dict(values)
-        if "nsimulations" in values:
-            values["nsimulations"] = int(values["nsimulations"])
+        values["num_montecarlo"] = int(values["num_montecarlo"])
+        values["random_seed"] = int(values["random_seed"])
+        values["doa_mode"] = str(values.get("doa_mode", "fixed")).lower()
+        if values["doa_mode"] not in VALID_DOA_MODES:
+            raise ValueError(f"doa_mode debe ser uno de {sorted(VALID_DOA_MODES)}")
         return cls(**values)
 
 
-@dataclass
-class ScenarioConfig:
-    """Configuración física y angular del escenario CRPA."""
-
-    speed_of_light_m_s: float
-    num_elements: int
-    element_spacing_over_lambda: float
-    num_snapshots: int
-    noise_power_linear: float
+@dataclass(frozen=True)
+class BeamformingConfig:
+    algorithm: str
     desired_azimuth_deg: float
     desired_elevation_deg: float
+    diagonal_loading_factor: float
+    power_inversion_reference_element: int = 0
+
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "BeamformingConfig":
+        values = dict(values)
+        values["algorithm"] = str(values.get("algorithm", "lcmv")).lower()
+        if values["algorithm"] not in VALID_ALGORITHMS:
+            raise ValueError(f"algorithm debe ser uno de {sorted(VALID_ALGORITHMS)}")
+        values["power_inversion_reference_element"] = int(values.get("power_inversion_reference_element", 0))
+        return cls(**values)
+
+
+@dataclass(frozen=True)
+class ScanConfig:
     azimuth_scan_min_deg: float
     azimuth_scan_max_deg: float
     azimuth_scan_step_deg: float
-    fixed_azimuth_cut_deg: float
     elevation_scan_min_deg: float
     elevation_scan_max_deg: float
     elevation_scan_step_deg: float
-    random_seed: int
-    output_dir: str
-    carrier_frequency_hz: float | None = None
-    diagonal_loading_factor: float = 1e-3
-
-    def set_carrier_frequency_from_simulation(self, simulation_config: SimulationConfig) -> None:
-        band_label = normalize_gnss_band(simulation_config.gnssBand)
-        if band_label not in GNSS_CARRIER_FREQUENCIES_HZ:
-            raise ValueError(f"Banda GNSS no válida: {simulation_config.gnssBand}")
-        self.carrier_frequency_hz = GNSS_CARRIER_FREQUENCIES_HZ[band_label]
-
-    @property
-    def wavelength_m(self) -> float:
-        if self.carrier_frequency_hz is None:
-            raise ValueError("carrier_frequency_hz no definido. Carga la banda GNSS primero.")
-        return self.speed_of_light_m_s / self.carrier_frequency_hz
-
-    @property
-    def element_spacing_m(self) -> float:
-        return self.element_spacing_over_lambda * self.wavelength_m
+    null_thresholds_dB: list[float]
 
     @classmethod
-    def from_dict(cls, values: dict[str, Any]) -> "ScenarioConfig":
+    def from_dict(cls, values: dict[str, Any]) -> "ScanConfig":
         values = dict(values)
-        values["num_snapshots"] = int(values["num_snapshots"])
-        values["num_elements"] = int(values["num_elements"])
-        values["random_seed"] = int(values["random_seed"])
+        values["null_thresholds_dB"] = [float(x) for x in values.get("null_thresholds_dB", [-10, -20, -30, -40])]
         return cls(**values)
 
 
-@dataclass
-class JammerConfig:
-    """Configuración de un jammer/interferente."""
+@dataclass(frozen=True)
+class NoiseConfig:
+    noise_power_linear: float
 
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "NoiseConfig":
+        return cls(**values)
+
+
+@dataclass(frozen=True)
+class JammerTemplate:
+    name: str
+    azimuth_deg: float
+    elevation_deg: float
+    signal_type: str = "complex_gaussian"
+    normalized_frequency: float = 0.0
+    bandwidth_hz: float | None = None
+
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "JammerTemplate":
+        values = dict(values)
+        values["signal_type"] = str(values.get("signal_type", "complex_gaussian")).lower()
+        values.setdefault("normalized_frequency", 0.0)
+        values.setdefault("bandwidth_hz", None)
+        return cls(**values)
+
+
+@dataclass(frozen=True)
+class JammerInstance:
     name: str
     azimuth_deg: float
     elevation_deg: float
     jnr_dB: float
     signal_type: str = "complex_gaussian"
-    normalized_frequency: float = 0.05
+    normalized_frequency: float = 0.0
+    bandwidth_hz: float | None = None
 
-    def __post_init__(self) -> None:
-        self.signal_type = self.signal_type.lower()
+
+@dataclass(frozen=True)
+class JammerConfig:
+    num_jammers: int
+    jnr_dB: float
+    variable_doa_azimuth_range_deg: tuple[float, float]
+    variable_doa_elevation_range_deg: tuple[float, float]
+    base_jammers: list[JammerTemplate]
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "JammerConfig":
+        values = dict(values)
+        values["num_jammers"] = int(values["num_jammers"])
+        values["jnr_dB"] = float(values["jnr_dB"])
+        values["variable_doa_azimuth_range_deg"] = tuple(float(x) for x in values["variable_doa_azimuth_range_deg"])
+        values["variable_doa_elevation_range_deg"] = tuple(float(x) for x in values["variable_doa_elevation_range_deg"])
+        values["base_jammers"] = [JammerTemplate.from_dict(x) for x in values["base_jammers"]]
         return cls(**values)
+
+
+@dataclass(frozen=True)
+class OutputConfig:
+    output_dir: str
+    save_csv: bool = True
+    save_npz: bool = True
+    save_plots: bool = True
+    csv_separator: str = ";"
+    csv_decimal: str = ","
+
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> "OutputConfig":
+        return cls(**values)
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    array: ArrayConfig
+    signal: SignalConfig
+    simulation: SimulationConfig
+    beamforming: BeamformingConfig
+    scan: ScanConfig
+    noise: NoiseConfig
+    jammer: JammerConfig
+    output: OutputConfig
+
+    @property
+    def element_spacing_m(self) -> float:
+        return self.array.element_spacing_over_lambda * self.signal.wavelength_m
