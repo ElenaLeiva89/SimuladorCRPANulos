@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from crpa_sim.crpa_array import (
+    compute_2d_response_grid,
     compute_azimuth_response_cut,
     compute_elevation_response_cut,
     conventional_steering_weights,
@@ -13,6 +14,8 @@ from crpa_sim.plots import (
     _crpa_display_labels_clockwise,
     _db_to_polar_radius,
     plot_array_geometry,
+    plot_array_factor_heatmap_comparison,
+    plot_pattern_comparison_3d,
     plot_pattern_comparison_azimuth,
     plot_pattern_comparison_elevation,
     plot_temporal_spectrum,
@@ -92,6 +95,42 @@ def test_pattern_plots_create_files(tmp_path, geometry, scenario):
     assert az_output.stat().st_size > 0
     assert el_output.exists()
     assert el_output.stat().st_size > 0
+
+
+def test_plot_pattern_comparison_3d_creates_file(tmp_path, geometry, scenario):
+    weights = conventional_steering_weights(
+        geometry,
+        scenario.desired_azimuth_deg,
+        scenario.desired_elevation_deg,
+        scenario.wavelength_m,
+    )
+    az = np.linspace(-90.0, 90.0, 31)
+    el = np.linspace(-45.0, 45.0, 21)
+    grid = compute_2d_response_grid(geometry, weights, scenario.wavelength_m, az, el)
+
+    output = tmp_path / "pattern_3d.png"
+    plot_pattern_comparison_3d(grid, grid, output, "Pattern 3D test")
+
+    assert output.exists()
+    assert output.stat().st_size > 0
+
+
+def test_plot_array_factor_heatmap_comparison_creates_file(tmp_path, geometry, scenario):
+    weights = conventional_steering_weights(
+        geometry,
+        scenario.desired_azimuth_deg,
+        scenario.desired_elevation_deg,
+        scenario.wavelength_m,
+    )
+    az = np.linspace(-90.0, 90.0, 31)
+    el = np.linspace(-45.0, 45.0, 21)
+    grid = compute_2d_response_grid(geometry, weights, scenario.wavelength_m, az, el)
+
+    output = tmp_path / "array_factor.png"
+    plot_array_factor_heatmap_comparison(grid, grid, output, "Array Factor test")
+
+    assert output.exists()
+    assert output.stat().st_size > 0
 
 
 def test_plot_temporal_spectrum_creates_file(tmp_path):

@@ -21,6 +21,7 @@ import pandas as pd
 
 from crpa_sim.beamformers import compute_weights
 from crpa_sim.crpa_array import (
+    compute_2d_response_grid,
     compute_azimuth_response_cut,
     compute_elevation_response_cut,
     compute_null_depth_dB,
@@ -37,6 +38,8 @@ from crpa_sim.io_utils import (
 from crpa_sim.jammers import generate_received_snapshot_matrix
 from crpa_sim.plots import (
     plot_array_geometry,
+    plot_array_factor_heatmap_comparison,
+    plot_pattern_comparison_3d,
     plot_pattern_comparison_azimuth,
     plot_pattern_comparison_elevation,
     plot_temporal_spectrum,
@@ -110,8 +113,23 @@ def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
         element_positions_m, selected_weights, config.wavelength_m, elevation_scan_deg, config.fixed_azimuth_cut_deg
     )
 
+    conventional_2d_grid = compute_2d_response_grid(
+        element_positions_m,
+        conventional_weights,
+        config.wavelength_m,
+        azimuth_scan_deg,
+        elevation_scan_deg,
+    )
+    selected_2d_grid = compute_2d_response_grid(
+        element_positions_m,
+        selected_weights,
+        config.wavelength_m,
+        azimuth_scan_deg,
+        elevation_scan_deg,
+    )
+
     covariance_matrix = compute_sample_covariance(snapshot_matrix)
-    temporal_spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, sample_rate_hz=1.0)
+    temporal_spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, sample_rate_hz=64e6, n_fft=8192)
 
     null_depth_rows = []
     reference_gain_abs = selected_azimuth["response_abs"].max()
@@ -157,6 +175,8 @@ def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
     plot_array_geometry(element_positions_m, output_dir / "array_geometry.png")
     plot_pattern_comparison_azimuth(conventional_azimuth, selected_azimuth, output_dir / "pattern_azimuth_dB.png", title + " - Azimuth", jammer_azimuths, adaptive_label=simulation.algorithmType)
     plot_pattern_comparison_elevation(conventional_elevation, selected_elevation, output_dir / "pattern_elevation_dB.png", title + " - Elevation", jammer_elevations, adaptive_label=simulation.algorithmType)
+    plot_pattern_comparison_3d(conventional_2d_grid, selected_2d_grid, output_dir / "pattern_3d_comparison.png", title + " - 3D Array Factor")
+    plot_array_factor_heatmap_comparison(conventional_2d_grid, selected_2d_grid, output_dir / "array_factor_heatmap.png", title + " - Array Factor")
     plot_temporal_spectrum(temporal_spectrum, output_dir / "temporal_fft_snapshot_spectrum.png", "FFT temporal media de snapshots")
 
     print(f"Resultados guardados en: {output_dir.resolve()}")

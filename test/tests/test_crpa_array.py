@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from crpa_sim.crpa_array import (
+    compute_2d_response_grid,
     compute_azimuth_response_cut,
     compute_elevation_response_cut,
     compute_null_depth_dB,
@@ -133,6 +134,25 @@ def test_azimuth_and_elevation_cuts_return_dataframes(geometry, scenario):
     assert isinstance(el_df, pd.DataFrame)
     assert list(az_df["elevation_deg"]) == [0.0, 0.0, 0.0]
     assert list(el_df["azimuth_deg"]) == [0.0, 0.0, 0.0]
+
+
+def test_compute_2d_response_grid_returns_matrix_shapes(geometry, scenario):
+    weights = conventional_steering_weights(
+        geometry,
+        0.0,
+        0.0,
+        scenario.wavelength_m,
+    )
+    az = np.linspace(-90.0, 90.0, 7)
+    el = np.linspace(-45.0, 45.0, 5)
+
+    grid = compute_2d_response_grid(geometry, weights, scenario.wavelength_m, az, el)
+
+    assert grid["azimuth_deg"].shape == (len(el), len(az))
+    assert grid["elevation_deg"].shape == (len(el), len(az))
+    assert grid["response_dB_normalized"].shape == (len(el), len(az))
+    assert np.isclose(grid["response_dB_normalized"].max(), 0.0, atol=1e-6)
+    assert np.isclose(grid["response_abs_normalized"].max(), 1.0, atol=1e-9)
 
 
 def test_null_depth_is_finite(geometry, scenario):

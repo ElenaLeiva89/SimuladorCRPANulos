@@ -15,6 +15,20 @@ def test_temporal_fft_snapshot_matrix_columns_and_length():
     assert df["power_dB_normalized"].max() <= 1e-9
 
 
+def test_temporal_fft_snapshot_matrix_supports_nfft_and_real_frequency():
+    num_snapshots = 4096
+    sample_rate_hz = 64e6
+    tone_frequency_hz = 8e6
+    n = np.arange(num_snapshots)
+    tone = np.exp(1j * 2.0 * np.pi * tone_frequency_hz * n / sample_rate_hz)
+    X = np.tile(tone, (7, 1))
+
+    df = temporal_fft_snapshot_matrix(X, sample_rate_hz=sample_rate_hz, n_fft=8192)
+    peak_freq = df.loc[df["power_dB_normalized"].idxmax(), "frequency_hz"]
+
+    assert abs(peak_freq - tone_frequency_hz) < sample_rate_hz / 8192
+
+
 def test_temporal_fft_detects_tone_near_expected_frequency():
     num_snapshots = 512
     freq = 0.125

@@ -4,7 +4,7 @@
     "gnssBand": 3,  
     "maxPhaseNoise_deg": 2.0,
     "maxAmplNoise_dB": 0.5,
-    "interferenceType": [1],
+    "interferenceType": [1, 1],
     "algorithmType": "lcmv"
   },
   "scenario_config": {
@@ -31,6 +31,14 @@
       "azimuth_deg": 40.0,
       "elevation_deg": 10.0,
       "jnr_dB": 30.0,
+      "signal_type": "tone",
+      "normalized_frequency": 0.05
+    },
+    {
+      "name": "Jammer_2",
+      "azimuth_deg": 70.0,
+      "elevation_deg": 30.0,
+      "jnr_dB": 40.0,
       "signal_type": "tone",
       "normalized_frequency": 0.05
     }

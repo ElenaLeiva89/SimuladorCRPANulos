@@ -46,10 +46,12 @@ def plot_pattern_comparison_azimuth(
         ax.plot(theta, radius, linewidth=2, label=label, color=color)
 
         if idx == 2 and jammer_azimuths_deg is not None:
+            colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'brown']
             for i, az in enumerate(jammer_azimuths_deg):
                 jammer_rad = np.deg2rad(az)
                 radii = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(radii, jammer_rad), radii, "r--", linewidth=2, label=f"Jammer {i+1} ({az:.1f}°)")
+                color = colors[i % len(colors)]
+                ax.plot(np.full_like(radii, jammer_rad), radii, color=color, linestyle="--", linewidth=2, label=f"Jammer {i+1} ({az:.1f}°)")
 
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
@@ -98,10 +100,12 @@ def plot_pattern_comparison_elevation(
         ax.plot(theta + np.deg2rad(90), radius, linewidth=2, label=label, color=color)
 
         if idx == 2 and jammer_elevations_deg is not None:
+            colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'brown']
             for i, el in enumerate(jammer_elevations_deg):
                 jammer_rad = np.deg2rad(el)
                 radii = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(radii, jammer_rad), radii, "r--", linewidth=2, label=f"Jammer {i+1} ({el:.1f}°)")
+                color = colors[i % len(colors)]
+                ax.plot(np.full_like(radii, jammer_rad), radii, color=color, linestyle="--", linewidth=2, label=f"Jammer {i+1} ({el:.1f}°)")
 
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
@@ -189,11 +193,78 @@ def plot_array_geometry(element_positions_m: np.ndarray, output_path: Path) -> N
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
+
+def plot_pattern_comparison_3d(
+    conventional_grid: dict[str, np.ndarray],
+    adaptive_grid: dict[str, np.ndarray],
+    output_path: Path,
+    title: str,
+) -> None:
+    """Dibuja superficies 3D del array factor para patrón convencional y adaptativo."""
+    fig = plt.figure(figsize=(18, 8))
+    for idx, (grid, label) in enumerate(
+        [(conventional_grid, "Convencional"), (adaptive_grid, "Adaptativo")], start=1
+    ):
+        ax = fig.add_subplot(1, 2, idx, projection="3d")
+        surf = ax.plot_surface(
+            grid["azimuth_deg"],
+            grid["elevation_deg"],
+            grid["response_dB_normalized"],
+            cmap="viridis",
+            linewidth=0,
+            antialiased=True,
+            rcount=120,
+            ccount=120,
+        )
+        ax.set_xlabel("Azimuth [deg]")
+        ax.set_ylabel("Elevation [deg]")
+        ax.set_zlabel("Response (dB)")
+        ax.set_title(label)
+        fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1, label="Response (dB)")
+        ax.view_init(elev=30, azim=-120)
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+
+
+def plot_array_factor_heatmap_comparison(
+    conventional_grid: dict[str, np.ndarray],
+    adaptive_grid: dict[str, np.ndarray],
+    output_path: Path,
+    title: str,
+) -> None:
+    """Dibuja un mapa de calor 2D del array factor para patrón convencional y adaptativo."""
+    fig, axes = plt.subplots(1, 2, figsize=(18, 6), constrained_layout=True)
+
+    for ax, grid, label in zip(
+        axes,
+        [conventional_grid, adaptive_grid],
+        ["Convencional", "Adaptativo"],
+    ):
+        pcm = ax.pcolormesh(
+            grid["azimuth_deg"],
+            grid["elevation_deg"],
+            grid["response_dB_normalized"],
+            shading="auto",
+            cmap="viridis",
+        )
+        ax.set_xlabel("Azimuth [deg]")
+        ax.set_ylabel("Elevation [deg]")
+        ax.set_title(label)
+        fig.colorbar(pcm, ax=ax, pad=0.01, label="Response (dB)")
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+
+
 def plot_temporal_spectrum(spectrum_table: pd.DataFrame, output_path: Path, title: str) -> None:
-    """Dibuja FFT temporal media de los snapshots."""
+    """Dibuja FFT temporal media de los snapshots en frecuencia real."""
     fig, ax = plt.subplots(figsize=(9, 4))
     ax.plot(spectrum_table["frequency_hz"], spectrum_table["power_dB_normalized"], linewidth=1.5)
-    ax.set_xlabel("Frecuencia normalizada / Hz")
+    ax.set_xlabel("Frecuencia (Hz)")
     ax.set_ylabel("Potencia normalizada (dB)")
     ax.set_title(title)
     ax.grid(True)

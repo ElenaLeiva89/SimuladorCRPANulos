@@ -99,6 +99,51 @@ def compute_response_for_angles(
     )
 
 
+def compute_2d_response_grid(
+    element_positions_m: np.ndarray,
+    weights: np.ndarray,
+    wavelength_m: float,
+    azimuth_scan_deg: np.ndarray,
+    elevation_scan_deg: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Evalúa el patrón 2D w^H a(az,el) en una malla de azimut/elevación.
+
+    Retorna las matrices de azimut/elevación y la respuesta normalizada en magnitud y dB.
+    Esta función es útil para obtener el array factor en 2D y dibujar superficies 3D.
+    """
+    azimuth_scan_deg = np.asarray(azimuth_scan_deg, dtype=float)
+    elevation_scan_deg = np.asarray(elevation_scan_deg, dtype=float)
+    az_grid, el_grid = np.meshgrid(azimuth_scan_deg, elevation_scan_deg, indexing="xy")
+    az_flat = az_grid.ravel()
+    el_flat = el_grid.ravel()
+
+    az_rad = np.deg2rad(az_flat)
+    el_rad = np.deg2rad(el_flat)
+    u = np.column_stack(
+        [
+            np.cos(el_rad) * np.cos(az_rad),
+            np.cos(el_rad) * np.sin(az_rad),
+            np.sin(el_rad),
+        ]
+    )
+    k_rad_m = 2.0 * np.pi / wavelength_m
+    phase_rad = k_rad_m * (u @ element_positions_m.T)
+    steering = np.exp(1j * phase_rad)
+
+    response_complex = steering @ np.conjugate(weights)
+    response_abs = np.abs(response_complex).reshape(az_grid.shape)
+    response_abs_norm = response_abs / (np.max(response_abs) + 1e-15)
+    response_dB_norm = 20.0 * np.log10(response_abs_norm + 1e-12)
+
+    return {
+        "azimuth_deg": az_grid,
+        "elevation_deg": el_grid,
+        "response_abs": response_abs,
+        "response_abs_normalized": response_abs_norm,
+        "response_dB_normalized": response_dB_norm,
+    }
+
+
 def compute_azimuth_response_cut(
     element_positions_m: np.ndarray,
     weights: np.ndarray,
