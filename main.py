@@ -34,6 +34,7 @@ from crpa_sim.io_utils import (
     load_simulation_parameters,
     print_generated_files,
     save_run_log,
+    save_dataframe
 )
 from crpa_sim.jammers import generate_received_snapshot_matrix
 from crpa_sim.plots import (
@@ -45,6 +46,7 @@ from crpa_sim.plots import (
     plot_temporal_spectrum,
 )
 from crpa_sim.covariance import compute_sample_covariance
+from crpa_sim.null_metrics import compute_null_metrics_for_jammers
 
 def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
     """
@@ -131,6 +133,7 @@ def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
     covariance_matrix = compute_sample_covariance(snapshot_matrix)
     temporal_spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, sample_rate_hz=64e6, n_fft=8192)
 
+    """ ESTO SE CAMBIA PARA EL CALCULO DE LOS ANCHOS DE NULOS
     null_depth_rows = []
     reference_gain_abs = selected_azimuth["response_abs"].max()
     for jammer in jammer_list:
@@ -151,7 +154,18 @@ def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
             }
         )
     null_depth_table = pd.DataFrame(null_depth_rows)
-
+    """
+    null_metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
+        element_positions_m=element_positions_m,
+        weights=selected_weights,
+        config=config,
+        jammer_list=jammer_list,
+        azimuth_scan_deg=azimuth_scan_deg,
+        elevation_scan_deg=elevation_scan_deg,
+        thresholds_dB=(0, -10, -20, -30, -40),
+    )
+    null_depth_rows = null_metrics_table.to_dict(orient="records")
+    
     print("Guardando resultados...")
     # save_configuration_copy(output_dir, simulation, config, jammer_list)
     # save_dataframe(pd.DataFrame(element_positions_m, columns=["x_m", "y_m", "z_m"]), output_dir / "element_positions_m.csv")
@@ -162,9 +176,10 @@ def run_simulation(input_config_path: Path = Path("input_config.json")) -> None:
     # save_dataframe(selected_elevation, output_dir / "pattern_selected_algorithm_elevation.csv")
     # save_dataframe(temporal_spectrum, output_dir / "temporal_fft_snapshot_spectrum.csv")
     # save_dataframe(null_depth_table, output_dir / "null_depth_table.csv")
-
     # save_complex_npz(output_dir / "matrices_complex.npz", snapshot_matrix=snapshot_matrix, covariance_matrix=covariance_matrix, selected_weights=selected_weights, conventional_weights=conventional_weights)
-
+    save_dataframe(null_metrics_table, output_dir / "null_metrics_by_jammer.csv")
+    for cut_name, cut_table in jammer_cut_tables.items():
+        save_dataframe(cut_table, output_dir /  f"{cut_name}.csv")
     save_run_log(simulation, config, output_dir, len(jammer_list), null_depth_rows)
 
     print("Generando plots...")

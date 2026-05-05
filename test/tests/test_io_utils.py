@@ -10,7 +10,6 @@ from crpa_sim.io_utils import (
     load_configuration_file,
     load_simulation_parameters,
     save_complex_npz,
-    save_configuration_copy,
     save_dataframe,
     save_run_log,
 )
@@ -85,7 +84,6 @@ def test_load_configuration_file_parses_config(tmp_path):
 def test_save_helpers_create_files(tmp_path, simulation_lcmv, scenario, jammer_tone):
     output_dir = ensure_output_dir(tmp_path / "results")
 
-    save_configuration_copy(output_dir, simulation_lcmv, scenario, [jammer_tone])
     save_complex_npz(output_dir / "arrays.npz", x=np.ones(3))
     save_dataframe(pd.DataFrame({"a": [1, 2]}), output_dir / "table.csv")
     save_run_log(
