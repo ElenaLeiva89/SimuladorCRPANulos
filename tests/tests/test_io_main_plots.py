@@ -56,7 +56,40 @@ def test_main_run_project_light(config_json_path):
     out = Path(cfg.output.output_dir)
     assert (out / "config_used.json").exists()
     assert (out / "run_log.txt").exists()
-    assert (out / "null_metrics_by_jammer.csv").exists()
-    assert (out / "null_metrics_summary.csv").exists()
-    assert (out / "matrices_complex.npz").exists()
-    assert (out / "jammer_cuts").exists()
+    assert not (out / "null_metrics_by_jammer.csv").exists()
+    summary_path = out / "null_metrics_summary.csv"
+    assert summary_path.exists()
+    summary = pd.read_csv(summary_path, sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
+    assert list(summary.columns) == [
+        "jammer_name",
+        "attenuation_threshold_dB",
+        "null_width_azimuth_deg",
+        "null_width_elevation_deg",
+    ]
+    assert len(summary) == len(cfg.jammer.base_jammers[: cfg.jammer.num_jammers]) * len(cfg.scan.null_thresholds_dB)
+    assert (out / "output_data" / "element_positions_m.csv").exists()
+    assert (out / "output_data" / "jammer_table.csv").exists()
+    assert (out / "output_data" / "matrices_complex.npz").exists()
+    assert (out / "output_data" / "jammer_cuts").exists()
+    assert list((out / "output_data" / "jammer_cuts").glob("*.csv"))
+
+def test_global_outputs_save_npz_without_csv(project_config, element_positions_m, rng, tmp_path):
+    from main import _save_global_outputs
+    from crpa_sim.covariance import compute_sample_covariance
+    from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
+    from crpa_sim.patterns import conventional_weights, make_scan_vectors
+
+    cfg = replace(
+        project_config,
+        output=replace(project_config.output, output_dir=str(tmp_path / "results"), save_csv=False, save_npz=True, save_plots=False),
+    )
+    out = ensure_output_dir(cfg.output.output_dir)
+    jammers = build_jammer_case(cfg, rng)
+    X, jammer_table = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+    w = conventional_weights(cfg, element_positions_m)
+    az, el = make_scan_vectors(cfg)
+
+    _save_global_outputs(cfg, out, element_positions_m, X, compute_sample_covariance(X), w, w, jammers, jammer_table, az, el)
+
+    assert (out / "output_data" / "matrices_complex.npz").exists()
+    assert not (out / "output_data" / "jammer_table.csv").exists()

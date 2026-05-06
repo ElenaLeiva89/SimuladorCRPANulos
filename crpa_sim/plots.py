@@ -76,6 +76,7 @@ def plot_pattern_comparison_azimuth(
     title: str,
     jammer_azimuths_deg: list[float] | None = None,
     adaptive_label: str = "Algoritmo",
+    fixed_elevation_deg: float | None = None,
 ) -> None:
     fig = plt.figure(figsize=(14, 6))
     min_display_dB = -50.0
@@ -91,9 +92,10 @@ def plot_pattern_comparison_azimuth(
 
         if idx == 2 and jammer_azimuths_deg:
             for j_idx, az in enumerate(jammer_azimuths_deg, start=1):
+                label = f"Jammer {j_idx} ({az:.1f}°)"
                 rad = np.deg2rad(az)
                 rr = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=f"Jammer {j_idx} ({az:.1f}°)")
+                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label)
 
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
@@ -102,7 +104,7 @@ def plot_pattern_comparison_azimuth(
         ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
         ax.grid(True)
         ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
-        ax.set_title("1. Patrón convencional" if idx == 1 else "2. Patrón del algoritmo", fontweight="bold", fontsize=12)
+        ax.set_title("1. Patrón convencional a el = " f"{fixed_elevation_deg:.1f}°" if idx == 1 else "2. Patrón del algoritmo a el = " f"{fixed_elevation_deg:.1f}°", fontweight="bold", fontsize=12)
 
     fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout()
@@ -117,6 +119,7 @@ def plot_pattern_comparison_elevation(
     title: str,
     jammer_elevations_deg: list[float] | None = None,
     adaptive_label: str = "Algoritmo",
+    fixed_azimuth_deg: float | None = None,
 ) -> None:
     """Corte vertical: izquierda 180°, arriba 90° cenit, derecha 0°."""
     fig = plt.figure(figsize=(14, 6))
@@ -136,7 +139,8 @@ def plot_pattern_comparison_elevation(
             for j_idx, el in enumerate(jammer_elevations_deg, start=1):
                 rad = np.deg2rad(90.0 - el)
                 rr = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=f"Jammer {j_idx} ({el:.1f}°)")
+                label = f"Jammer {j_idx} ({el:.1f}°)"
+                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label)
 
         ax.set_theta_zero_location("N")
         ax.set_theta_direction(-1)
@@ -149,7 +153,7 @@ def plot_pattern_comparison_elevation(
         ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
         ax.grid(True)
         ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
-        ax.set_title("1. Patrón convencional" if idx == 1 else "2. Patrón del algoritmo", fontweight="bold", fontsize=12)
+        ax.set_title("1. Patrón convencional a az = " f"{fixed_azimuth_deg:.1f}°" if idx == 1 else "2. Patrón del algoritmo a az = " f"{fixed_azimuth_deg:.1f}°", fontweight="bold", fontsize=12)
 
     fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout()

@@ -140,9 +140,10 @@ class JammerTemplate:
     name: str
     azimuth_deg: float
     elevation_deg: float
-    signal_type: str = "complex_gaussian"
+    signal_type: str = "tone"
     normalized_frequency: float = 0.0
     bandwidth_hz: float | None = None
+    chirp_frequency: float | None = None
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "JammerTemplate":
@@ -150,6 +151,7 @@ class JammerTemplate:
         values["signal_type"] = str(values.get("signal_type", "complex_gaussian")).lower()
         values.setdefault("normalized_frequency", 0.0)
         values.setdefault("bandwidth_hz", None)
+        values.setdefault("chirp_frequency", None)
         return cls(**values)
 
 
@@ -162,7 +164,7 @@ class JammerInstance:
     signal_type: str = "complex_gaussian"
     normalized_frequency: float = 0.0
     bandwidth_hz: float | None = None
-
+    chirp_frequency: float | None = None
 
 @dataclass(frozen=True)
 class JammerConfig:

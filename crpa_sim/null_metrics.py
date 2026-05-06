@@ -81,7 +81,7 @@ def compute_null_metrics_for_jammers(
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
 
-        cut_prefix = f"mc{montecarlo_index:04d}_jammer_{jammer_index}_{jammer.name}"
+        cut_prefix = f"{jammer.name}"
         cuts[f"{cut_prefix}_azimuth_cut"] = az_cut
         cuts[f"{cut_prefix}_elevation_cut"] = el_cut
 
@@ -102,16 +102,10 @@ def compute_null_metrics_for_jammers(
             )
             rows.append(
                 {
-                    "montecarlo_index": montecarlo_index,
-                    "algorithm": config.beamforming.algorithm,
-                    "doa_mode": config.simulation.doa_mode,
-                    "num_jammers": config.jammer.num_jammers,
-                    "jammer_index": jammer_index,
                     "jammer_name": jammer.name,
                     "jammer_azimuth_deg": jammer.azimuth_deg,
                     "jammer_elevation_deg": jammer.elevation_deg,
                     "jammer_jnr_dB": jammer.jnr_dB,
-                    "jammer_signal_type": jammer.signal_type,
                     "null_depth_dB": null_depth,
                     "attenuation_threshold_dB": threshold,
                     "null_width_azimuth_deg": width_az,
@@ -125,12 +119,14 @@ def compute_null_metrics_for_jammers(
 def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     """Resumen estadístico agrupado de métricas Monte Carlo."""
     group_cols = [
-        "algorithm",
-        "doa_mode",
-        "num_jammers",
-        "jammer_index",
         "jammer_name",
         "attenuation_threshold_dB",
     ]
-    numeric_cols = ["null_depth_dB", "null_width_azimuth_deg", "null_width_elevation_deg"]
-    return metrics.groupby(group_cols, dropna=False)[numeric_cols].agg(["mean", "std", "min", "max", "count"]).reset_index()
+
+    numeric_cols = [
+        "null_width_azimuth_deg",
+        "null_width_elevation_deg",
+    ]
+
+    return (metrics.groupby(group_cols, dropna=False)[numeric_cols].mean().reset_index()
+    )

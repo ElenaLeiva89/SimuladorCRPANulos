@@ -55,6 +55,11 @@ El número de jammers se controla aquí:
   "jnr_dB": 40.0
 }
 ```
+`base_jammers` solo acepta `signal_type`:
+
+- `tone`
+- `complex_gaussian`
+- `chrip`
 
 `num_jammers` debe ser `1 <= num_jammers <= num_elements - 1`.
 

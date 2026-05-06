@@ -14,6 +14,10 @@ def test_jammer_power_noise_and_signals(project_config, rng):
     assert np.allclose(np.abs(s), 2.0)
     gaussian = JammerInstance("G", 70, 30, 30, "complex_gaussian")
     assert generate_jammer_baseband_signal(gaussian, 128, 4.0, rng).shape == (128,)
+    chirp = JammerInstance("C", 10, 20, 30, "chirp", chirp_frequency=0.02)
+    chirp_signal = generate_jammer_baseband_signal(chirp, 128, 4.0, rng)
+    assert chirp_signal.shape == (128,)
+    assert np.allclose(np.abs(chirp_signal), 2.0)
     with pytest.raises(ValueError):
         generate_jammer_baseband_signal(JammerInstance("bad", 0, 0, 1, "bad"), 128, 1.0, rng)
 
@@ -30,6 +34,25 @@ def test_build_jammer_case_fixed_variable_and_matrix(project_config, variable_pr
     assert X.shape == (project_config.array.num_elements, project_config.signal.num_snapshots)
     assert len(table) == len(fixed)
     assert "jammer_power_linear" in table.columns
+
+def test_build_jammer_case_preserves_chirp_frequency(project_config, rng):
+    chirp_cfg = replace(
+        project_config,
+        jammer=replace(
+            project_config.jammer,
+            num_jammers=1,
+            base_jammers=[
+                replace(
+                    project_config.jammer.base_jammers[0],
+                    signal_type="chirp",
+                    chirp_frequency=0.03,
+                )
+            ],
+        ),
+    )
+    jammers = build_jammer_case(chirp_cfg, rng)
+    assert jammers[0].signal_type == "chirp"
+    assert jammers[0].chirp_frequency == pytest.approx(0.03)
 
 def test_build_jammer_case_bad_mode(project_config, rng):
     bad = replace(project_config, simulation=replace(project_config.simulation, doa_mode="bad"))

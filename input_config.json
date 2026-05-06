@@ -15,7 +15,7 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 20,
+    "num_montecarlo": 10,
     "random_seed": 12345,
     "doa_mode": "fixed"
   },
@@ -24,14 +24,14 @@
     "desired_azimuth_deg": 0.0,
     "desired_elevation_deg": 90.0,
     "diagonal_loading_factor": 0.001,
-    "power_inversion_reference_element": 0
+    "power_inversion_reference_element": 1
   },
   "scan_config": {
     "azimuth_scan_min_deg": -180.0,
     "azimuth_scan_max_deg": 180.0,
     "azimuth_scan_step_deg": 0.5,
     "elevation_scan_min_deg": 0.0,
-    "elevation_scan_max_deg": 90.0,
+    "elevation_scan_max_deg": 180.0,
     "elevation_scan_step_deg": 0.5,
     "null_thresholds_dB": [-10, -20, -30, -40, -50]
   },
@@ -39,21 +39,21 @@
     "noise_power_linear": 1.0
   },
   "jammer_config": {
-    "num_jammers": 1,
-    "jnr_dB": 40.0,
+    "num_jammers": 2,
+    "jnr_dB": 20.0,
     "variable_doa_azimuth_range_deg": [-180.0, 180.0],
-    "variable_doa_elevation_range_deg": [5.0, 85.0],
+    "variable_doa_elevation_range_deg": [-90.0, 90.0],
     "base_jammers": [
-      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.05},
-      {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11},
-      {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00},
-      {"name": "Jammer_4", "azimuth_deg": -90.0, "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.17},
-      {"name": "Jammer_5", "azimuth_deg": 140.0, "elevation_deg": 45.0, "signal_type": "tone", "normalized_frequency": 0.00},
-      {"name": "Jammer_6", "azimuth_deg": -150.0,"elevation_deg": 60.0, "signal_type": "tone", "normalized_frequency": 0.23}
+      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
+      {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11, "chirp_frequency":60000000},
+      {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00, "chirp_frequency":60000000},
+      {"name": "Jammer_4", "azimuth_deg": -90.0, "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.17, "chirp_frequency":60000000},
+      {"name": "Jammer_5", "azimuth_deg": 140.0, "elevation_deg": 45.0, "signal_type": "tone", "normalized_frequency": 0.00, "chirp_frequency":60000000},
+      {"name": "Jammer_6", "azimuth_deg": -150.0,"elevation_deg": 60.0, "signal_type": "tone", "normalized_frequency": 0.23, "chirp_frequency":60000000}
     ]
   },
   "output_config": {
-    "output_dir": "results_crpa_nullforming",
+    "output_dir": "results_crpa_nullforming_lcmv_2_jammers",
     "save_csv": false,
     "save_npz": false,
     "save_plots": true,

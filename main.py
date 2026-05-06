@@ -30,7 +30,7 @@ from crpa_sim.io_utils import (
     save_run_log,
 )
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
-from crpa_sim.null_metrics import compute_null_metrics_for_jammers, summarize_null_metrics
+from crpa_sim.null_metrics import (compute_null_metrics_for_jammers, summarize_null_metrics, compute_null_depth_dB,)
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
@@ -62,6 +62,7 @@ def _save_global_outputs(
     covariance_matrix: np.ndarray,
     selected_weights: np.ndarray,
     conventional_w: np.ndarray,
+    jammer_list,
     jammer_table: pd.DataFrame,
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
@@ -69,14 +70,17 @@ def _save_global_outputs(
     """Guarda ficheros globales de la primera iteración MC."""
     sep = config.output.csv_separator
     dec = config.output.csv_decimal
+    output_dir_data = output_dir / "output_data"
 
     if config.output.save_csv:
-        save_dataframe(pd.DataFrame(element_positions_m, columns=["x_m", "y_m", "z_m"]), output_dir / "element_positions_m.csv", sep, dec)
-        save_dataframe(jammer_table, output_dir / "jammer_table.csv", sep, dec)
+        output_dir_data.mkdir(parents=True, exist_ok=True)
+        save_dataframe(pd.DataFrame(element_positions_m, columns=["x_m", "y_m", "z_m"]), output_dir_data / "element_positions_m.csv", sep, dec)
+        save_dataframe(jammer_table, output_dir_data / "jammer_table.csv", sep, dec)
 
     if config.output.save_npz:
+        output_dir_data.mkdir(parents=True, exist_ok=True)
         save_complex_npz(
-            output_dir / "matrices_complex.npz",
+            output_dir_data / "matrices_complex.npz",
             snapshot_matrix=snapshot_matrix,
             covariance_matrix=covariance_matrix,
             selected_weights=selected_weights,
@@ -117,23 +121,25 @@ def _save_global_outputs(
 
         jammer_az = jammer_table["azimuth_deg"].tolist() if not jammer_table.empty else []
         jammer_el = jammer_table["elevation_deg"].tolist() if not jammer_table.empty else []
-        title = f"CRPA 7 elementos - {config.signal.band_label} - {config.beamforming.algorithm} - DoA {config.simulation.doa_mode}"
+        title = f"Patron de radiación de CRPA 7 elementos y direcciones de jammers - {config.signal.band_label}"
 
         plot_pattern_comparison_azimuth(
             conv_az,
             sel_az,
             output_dir / "pattern_global_azimuth_dB.png",
-            title + " - Corte azimut global",
+            title + " - Azimuth",
             jammer_az,
             adaptive_label=config.beamforming.algorithm,
+            fixed_elevation_deg=config.beamforming.desired_elevation_deg,
         )
         plot_pattern_comparison_elevation(
             conv_el,
             sel_el,
             output_dir / "pattern_global_elevation_dB.png",
-            title + " - Corte elevación global",
+            title + " - Elevation",
             jammer_el,
             adaptive_label=config.beamforming.algorithm,
+            fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
         # conv_grid = compute_2d_response_grid(config, element_positions_m, conventional_w, azimuth_scan_deg, elevation_scan_deg)
@@ -141,10 +147,11 @@ def _save_global_outputs(
         # plot_heatmap_comparison(conv_grid, sel_grid, output_dir / "array_factor_heatmap.png", title + " - Mapa 2D")
         # plot_3d_comparison(conv_grid, sel_grid, output_dir / "pattern_3d_comparison.png", title + " - Patrón 3D")
 
+        
         spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, config.signal.sample_rate_hz, config.signal.fft_size)
-        save_dataframe(spectrum, output_dir / "temporal_fft_snapshot_spectrum.csv", sep, dec)
         plot_temporal_spectrum(spectrum, output_dir / "temporal_fft_snapshot_spectrum.png", "FFT temporal media de snapshots")
-
+        if config.output.save_csv:
+            save_dataframe(spectrum, output_dir_data / "temporal_fft_snapshot_spectrum.csv", sep, dec)
 
 def _save_jammer_plots(
     config,
@@ -168,8 +175,8 @@ def _save_jammer_plots(
     jammer_plots_dir.mkdir(parents=True, exist_ok=True)
 
     for idx, jammer in enumerate(jammer_list, start=1):
-        tag = f"jammer_{idx}_{jammer.name}"
-        jam_dir = jammer_plots_dir / tag
+        tag = f"{jammer.name}"
+        jam_dir = jammer_plots_dir
         jam_dir.mkdir(parents=True, exist_ok=True)
 
         conv_az = compute_azimuth_response_cut(config, element_positions_m, conventional_w, azimuth_scan_deg, jammer.elevation_deg)
@@ -177,28 +184,38 @@ def _save_jammer_plots(
         conv_el = compute_elevation_response_cut(config, element_positions_m, conventional_w, elevation_scan_deg, jammer.azimuth_deg)
         sel_el = compute_elevation_response_cut(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
 
+        null_depth_dB = compute_null_depth_dB(
+            config,
+            element_positions_m,
+            selected_weights,
+            jammer,
+            reference_gain_abs=1.0,
+        )
+
         title_base = f"{tag} - az={jammer.azimuth_deg:.1f}°, el={jammer.elevation_deg:.1f}° - {config.beamforming.algorithm}"
         plot_pattern_comparison_azimuth(
             conv_az,
             sel_az,
-            jam_dir / "pattern_azimuth_dB.png",
+            jam_dir / f"{tag}_pattern_azimuth_dB.png",
             title_base + " - Corte azimut por jammer",
             [jammer.azimuth_deg],
             adaptive_label=config.beamforming.algorithm,
+            fixed_elevation_deg=jammer.elevation_deg,
         )
         plot_pattern_comparison_elevation(
             conv_el,
             sel_el,
-            jam_dir / "pattern_elevation_dB.png",
+            jam_dir / f"{tag}_pattern_elevation_dB.png",
             title_base + " - Corte elevación por jammer",
             [jammer.elevation_deg],
             adaptive_label=config.beamforming.algorithm,
+            fixed_azimuth_deg=jammer.azimuth_deg,
         )
 
         conv_grid = compute_2d_response_grid(config, element_positions_m, conventional_w, azimuth_scan_deg, elevation_scan_deg)
         sel_grid = compute_2d_response_grid(config, element_positions_m, selected_weights, azimuth_scan_deg, elevation_scan_deg)
-        plot_3d_comparison(conv_grid, sel_grid, jam_dir / "pattern_3d_comparison.png", title_base + " - Patrón 3D")
-        plot_heatmap_comparison(conv_grid, sel_grid, jam_dir / "array_factor_heatmap.png", title_base + " - Mapa 2D")
+        plot_3d_comparison(conv_grid, sel_grid, jam_dir / f"{tag}_pattern_3d_comparison.png", title_base + " - Patrón 3D")
+        plot_heatmap_comparison(conv_grid, sel_grid, jam_dir / f"{tag}_array_factor_heatmap.png", title_base + " - Mapa 2D")
 
 
 def run_project(config_path: Path = Path("input_config.json")) -> None:
@@ -246,6 +263,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                 covariance_matrix,
                 selected_weights,
                 conventional_w,
+                jammer_list,
                 jammer_table,
                 azimuth_scan_deg,
                 elevation_scan_deg,
@@ -263,7 +281,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
             )
 
             if config.output.save_csv:
-                cuts_dir = output_dir / "jammer_cuts"
+                cuts_dir = output_dir / "output_data" / "jammer_cuts"
                 cuts_dir.mkdir(parents=True, exist_ok=True)
                 for name, table in jammer_cut_tables.items():
                     save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)
@@ -280,10 +298,9 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
 
     metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
     metrics_summary = summarize_null_metrics(metrics_full) if not metrics_full.empty else pd.DataFrame()
-
-    if config.output.save_csv:
-        save_dataframe(metrics_full, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
-        save_dataframe(metrics_summary, output_dir / "null_metrics_summary.csv", config.output.csv_separator, config.output.csv_decimal)
+    
+    #save_dataframe(metrics_full, output_dir_data / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
+    save_dataframe(metrics_summary, output_dir / "null_metrics_summary.csv", config.output.csv_separator, config.output.csv_decimal)
 
     save_run_log(config, output_dir, summary_rows)
     print_generated_files(output_dir)

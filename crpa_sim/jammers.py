@@ -34,8 +34,30 @@ def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, 
         phase0 = rng.uniform(0.0, 2.0 * np.pi)
         amplitude = np.sqrt(jammer_power_linear)
         return amplitude * np.exp(1j * (2.0 * np.pi * jammer.normalized_frequency * n + phase0))
-    raise ValueError(f"Tipo de jammer no soportado: {jammer.signal_type}")
+    if jammer.signal_type == "chirp":
+        n = np.arange(num_snapshots)
+        phase0 = rng.uniform(0.0, 2.0 * np.pi)
+        amplitude = np.sqrt(jammer_power_linear)
 
+        f0 = jammer.chirp_frequency
+        chirp_bandwidth_norm = 0.10
+
+        # Frecuencia:
+        # empieza en f0 - BW/2 y termina en f0 + BW/2
+        f_start = f0 - chirp_bandwidth_norm / 2.0
+        f_end = f0 + chirp_bandwidth_norm / 2.0
+
+        # Pendiente del chirp en ciclos/muestra^2
+        k = (f_end - f_start) / max(num_snapshots - 1, 1)
+
+        # Fase discreta de un chirp lineal:
+        phase = 2.0 * np.pi * (
+            f_start * n
+            + 0.5 * k * n**2
+        ) + phase0
+        return amplitude * np.exp(1j * phase)
+    raise ValueError(f"Tipo de jammer no soportado: {jammer.signal_type}")
+        
 
 def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[JammerInstance]:
     """Construye la lista de jammers para una iteración.
@@ -66,6 +88,7 @@ def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[J
                 signal_type=template.signal_type,
                 normalized_frequency=template.normalized_frequency,
                 bandwidth_hz=template.bandwidth_hz,
+                chirp_frequency=template.chirp_frequency,
             )
         )
     return jammers
