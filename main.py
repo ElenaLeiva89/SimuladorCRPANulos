@@ -119,8 +119,8 @@ def _save_global_outputs(
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
-        jammer_az = jammer_table["azimuth_deg"].tolist() if not jammer_table.empty else []
-        jammer_el = jammer_table["elevation_deg"].tolist() if not jammer_table.empty else []
+        jammer_az = list(zip(jammer_table["name"], jammer_table["azimuth_deg"])) if not jammer_table.empty else []
+        jammer_el = list(zip(jammer_table["name"], jammer_table["elevation_deg"])) if not jammer_table.empty else []
         title = f"Patron de radiación de CRPA 7 elementos y direcciones de jammers - {config.signal.band_label}"
 
         plot_pattern_comparison_azimuth(
@@ -198,7 +198,7 @@ def _save_jammer_plots(
             sel_az,
             jam_dir / f"{tag}_pattern_azimuth_dB.png",
             title_base + " - Corte azimut por jammer",
-            [jammer.azimuth_deg],
+            [(jammer.name, jammer.azimuth_deg)],
             adaptive_label=config.beamforming.algorithm,
             fixed_elevation_deg=jammer.elevation_deg,
         )
@@ -207,7 +207,7 @@ def _save_jammer_plots(
             sel_el,
             jam_dir / f"{tag}_pattern_elevation_dB.png",
             title_base + " - Corte elevación por jammer",
-            [jammer.elevation_deg],
+            [(jammer.name, jammer.elevation_deg)],
             adaptive_label=config.beamforming.algorithm,
             fixed_azimuth_deg=jammer.azimuth_deg,
         )

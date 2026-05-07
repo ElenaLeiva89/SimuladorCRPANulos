@@ -74,7 +74,7 @@ def plot_pattern_comparison_azimuth(
     adaptive_pattern: pd.DataFrame,
     output_path: Path,
     title: str,
-    jammer_azimuths_deg: list[float] | None = None,
+    jammer_info: list[tuple[str, float]] | None = None,
     adaptive_label: str = "Algoritmo",
     fixed_elevation_deg: float | None = None,
 ) -> None:
@@ -90,12 +90,12 @@ def plot_pattern_comparison_azimuth(
         radius = _db_to_radius(data["response_dB_normalized"].to_numpy(), min_display_dB)
         ax.plot(theta, radius, linewidth=2, label=label, color=color)
 
-        if idx == 2 and jammer_azimuths_deg:
-            for j_idx, az in enumerate(jammer_azimuths_deg, start=1):
-                label = f"Jammer {j_idx} ({az:.1f}°)"
+        if idx == 2 and jammer_info:
+            for jammer_name, az in jammer_info:
+                label = f"{jammer_name} ({az:.1f}°)"
                 rad = np.deg2rad(az)
                 rr = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label)
+                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label,)
 
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
@@ -117,7 +117,7 @@ def plot_pattern_comparison_elevation(
     adaptive_pattern: pd.DataFrame,
     output_path: Path,
     title: str,
-    jammer_elevations_deg: list[float] | None = None,
+    jammer_info: list[tuple[str, float]] | None = None,
     adaptive_label: str = "Algoritmo",
     fixed_azimuth_deg: float | None = None,
 ) -> None:
@@ -135,12 +135,12 @@ def plot_pattern_comparison_elevation(
         radius = _db_to_radius(data["response_dB_normalized"].to_numpy(), min_display_dB)
         ax.plot(theta, radius, linewidth=2, label=label, color=color)
 
-        if idx == 2 and jammer_elevations_deg:
-            for j_idx, el in enumerate(jammer_elevations_deg, start=1):
+        if idx == 2 and jammer_info:
+            for jammer_name, el in jammer_info:
                 rad = np.deg2rad(90.0 - el)
                 rr = np.linspace(0, abs(min_display_dB), 100)
-                label = f"Jammer {j_idx} ({el:.1f}°)"
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label)
+                label = f"{jammer_name} ({el:.1f}°)"
+                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label,)
 
         ax.set_theta_zero_location("N")
         ax.set_theta_direction(-1)
