@@ -22,9 +22,15 @@ def compute_null_depth_dB(
     reference_gain_abs: float = 1.0,
     floor_dB: float = -120.0,
 ) -> float:
-    """Profundidad del nulo en la dirección exacta del jammer.
+    """Calcula la profundidad del nulo en la direccion exacta del jammer.
 
-    Se limita a floor_dB para evitar suelos numéricos ideales tipo -240 dB.
+    Parametros:
+        config: Configuracion completa, usada para construir el steering.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        weights: Vector complejo de pesos del beamformer.
+        jammer: Jammer cuya direccion se evalua.
+        reference_gain_abs: Ganancia absoluta de referencia para convertir a dB.
+        floor_dB: Suelo minimo reportado para evitar valores numericos extremos.
     """
     a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
     gain_abs = abs(np.vdot(weights, a_j))
@@ -33,7 +39,14 @@ def compute_null_depth_dB(
 
 
 def measure_null_width_1d(angle_grid_deg: np.ndarray, response_dB: np.ndarray, jammer_angle_deg: float, threshold_dB: float) -> float | None:
-    """Anchura del intervalo contiguo alrededor del jammer por debajo del umbral."""
+    """Mide la anchura contigua del nulo alrededor del angulo del jammer.
+
+    Parametros:
+        angle_grid_deg: Vector angular del corte, en grados.
+        response_dB: Respuesta normalizada del corte, en dB.
+        jammer_angle_deg: Angulo del jammer dentro del eje del corte.
+        threshold_dB: Umbral de atenuacion usado para delimitar el nulo.
+    """
     angle_grid_deg = np.asarray(angle_grid_deg, dtype=float)
     response_dB = np.asarray(response_dB, dtype=float)
     idx = int(np.argmin(np.abs(angle_grid_deg - jammer_angle_deg)))
@@ -61,7 +74,17 @@ def compute_null_metrics_for_jammers(
     elevation_scan_deg: np.ndarray,
     montecarlo_index: int,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-    """Calcula tabla de métricas y cortes específicos por jammer."""
+    """Calcula metricas de nulo y cortes especificos para cada jammer.
+
+    Parametros:
+        config: Configuracion completa; aporta umbrales de nulo y steering.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        weights: Vector complejo de pesos del beamformer.
+        jammer_list: Lista de jammers a evaluar.
+        azimuth_scan_deg: Vector de azimuts para cortes horizontales.
+        elevation_scan_deg: Vector de elevaciones para cortes verticales.
+        montecarlo_index: Indice de la iteracion Monte Carlo actual.
+    """
     rows: list[dict] = []
     cuts: dict[str, pd.DataFrame] = {}
 
@@ -86,12 +109,13 @@ def compute_null_metrics_for_jammers(
         cuts[f"{cut_prefix}_elevation_cut"] = el_cut
 
         null_depth = compute_null_depth_dB(config, element_positions_m, weights, jammer, reference_gain_abs=1.0)
-
+        jammer_azimuth_for_width_deg = wrap_angle_180(jammer.azimuth_deg)
+        
         for threshold in config.scan.null_thresholds_dB:
             width_az = measure_null_width_1d(
                 az_cut["azimuth_deg"].to_numpy(),
                 az_cut["response_dB_normalized"].to_numpy(),
-                jammer.azimuth_deg,
+                jammer_azimuth_for_width_deg,
                 threshold,
             )
             width_el = measure_null_width_1d(
@@ -117,7 +141,12 @@ def compute_null_metrics_for_jammers(
 
 
 def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
-    """Resumen estadístico agrupado de métricas Monte Carlo."""
+    """Agrupa metricas Monte Carlo por jammer y umbral de atenuacion.
+
+    Parametros:
+        metrics: Tabla devuelta por compute_null_metrics_for_jammers,
+            concatenada para una o varias iteraciones Monte Carlo.
+    """
     group_cols = [
         "jammer_name",
         "attenuation_threshold_dB",
@@ -128,5 +157,8 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
         "null_width_elevation_deg",
     ]
 
-    return (metrics.groupby(group_cols, dropna=False)[numeric_cols].mean().reset_index()
-    )
+    return metrics.groupby(group_cols, dropna=False)[numeric_cols].mean().reset_index()
+
+def wrap_angle_180(angle_deg: float) -> float:
+    """Normaliza un azimut al rango [-180, 180)."""
+    return ((angle_deg + 180.0) % 360.0) - 180.0

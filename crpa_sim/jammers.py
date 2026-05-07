@@ -1,5 +1,5 @@
 """jammers.py
-Generación de ruido, señales jammer y matriz de snapshots X.
+Generacion de ruido, senales jammer y matriz de snapshots X.
 """
 
 from __future__ import annotations
@@ -15,17 +15,37 @@ from .config import JammerInstance, ProjectConfig
 
 
 def jammer_power_from_jnr(noise_power_linear: float, jnr_dB: float) -> float:
+    """Convierte JNR en dB a potencia lineal de jammer.
+
+    Parametros:
+        noise_power_linear: Potencia de ruido en escala lineal.
+        jnr_dB: Relacion jammer-ruido en dB.
+    """
     return noise_power_linear * 10.0 ** (jnr_dB / 10.0)
 
 
 def generate_complex_noise(config: ProjectConfig, rng: np.random.Generator) -> np.ndarray:
+    """Genera ruido complejo circular para todos los elementos del array.
+
+    Parametros:
+        config: Configuracion completa; aporta potencia de ruido, numero de
+            elementos y numero de snapshots.
+        rng: Generador aleatorio reproducible.
+    """
     sigma = np.sqrt(config.noise.noise_power_linear / 2.0)
     shape = (config.array.num_elements, config.signal.num_snapshots)
     return sigma * (rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
 
 
 def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, jammer_power_linear: float, rng: np.random.Generator) -> np.ndarray:
-    """Genera señal baseband compleja de un jammer."""
+    """Genera la senal baseband compleja de un jammer.
+
+    Parametros:
+        jammer: Instancia del jammer con tipo de senal y frecuencia.
+        num_snapshots: Numero de muestras temporales a generar.
+        jammer_power_linear: Potencia lineal deseada de la senal.
+        rng: Generador aleatorio usado para ruido gaussiano y fase inicial.
+    """
     if jammer.signal_type == "complex_gaussian":
         sigma = np.sqrt(jammer_power_linear / 2.0)
         return sigma * (rng.standard_normal(num_snapshots) + 1j * rng.standard_normal(num_snapshots))
@@ -42,28 +62,28 @@ def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, 
         f0 = jammer.chirp_frequency
         chirp_bandwidth_norm = 0.10
 
-        # Frecuencia:
-        # empieza en f0 - BW/2 y termina en f0 + BW/2
+        # Frecuencia inicial/final normalizada del chirp lineal.
         f_start = f0 - chirp_bandwidth_norm / 2.0
         f_end = f0 + chirp_bandwidth_norm / 2.0
 
-        # Pendiente del chirp en ciclos/muestra^2
+        # Pendiente del chirp en ciclos por muestra^2.
         k = (f_end - f_start) / max(num_snapshots - 1, 1)
 
-        # Fase discreta de un chirp lineal:
         phase = 2.0 * np.pi * (
             f_start * n
             + 0.5 * k * n**2
         ) + phase0
         return amplitude * np.exp(1j * phase)
     raise ValueError(f"Tipo de jammer no soportado: {jammer.signal_type}")
-        
+
 
 def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[JammerInstance]:
-    """Construye la lista de jammers para una iteración.
+    """Construye la lista de jammers para una iteracion Monte Carlo.
 
-    fixed: usa az/el de base_jammers.
-    variable: sortea az/el en los rangos configurados.
+    Parametros:
+        config: Configuracion completa; define numero de jammers, JNR, modo
+            DoA y plantillas base.
+        rng: Generador aleatorio usado cuando doa_mode="variable".
     """
     az_min, az_max = config.jammer.variable_doa_azimuth_range_deg
     el_min, el_max = config.jammer.variable_doa_elevation_range_deg
@@ -100,7 +120,14 @@ def generate_received_snapshot_matrix(
     jammer_list: Sequence[JammerInstance],
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, pd.DataFrame]:
-    """Genera X = ruido + suma_j a(az_j,el_j) s_j."""
+    """Genera la matriz recibida X = ruido + suma_j a_j s_j.
+
+    Parametros:
+        config: Configuracion completa; aporta ruido, snapshots y senal.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        jammer_list: Jammers que se inyectan en la matriz recibida.
+        rng: Generador aleatorio reproducible.
+    """
     X = generate_complex_noise(config, rng)
     rows = []
 

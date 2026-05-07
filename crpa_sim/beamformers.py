@@ -1,5 +1,5 @@
 """beamformers.py
-Algoritmos Power Inversion y LCMV.
+Algoritmos Power Inversion, LCMV y seleccion de pesos.
 """
 
 from __future__ import annotations
@@ -15,7 +15,14 @@ from .patterns import conventional_weights
 
 
 def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
-    """Power Inversion básico: w = R^-1 c / (c^H R^-1 c)."""
+    """Calcula pesos adaptativos con Power Inversion.
+
+    Parametros:
+        config: Configuracion del proyecto; aporta el elemento de referencia
+            y el factor de diagonal loading.
+        snapshot_matrix: Matriz X con forma (num_elements, num_snapshots)
+            usada para estimar la covarianza espacial.
+    """
     num_elements = snapshot_matrix.shape[0]
     ref_idx = config.beamforming.power_inversion_reference_element
     if not (0 <= ref_idx < num_elements):
@@ -37,9 +44,17 @@ def compute_lcmv_weights(
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
 ) -> np.ndarray:
-    """LCMV: w = R^-1 C (C^H R^-1 C)^-1 f."""
+    """Calcula pesos LCMV con ganancia unitaria deseada y nulos en jammers.
+
+    Parametros:
+        config: Configuracion del proyecto; define direccion deseada,
+            diagonal loading y parametros de array/senal.
+        snapshot_matrix: Matriz X usada para estimar la covarianza espacial.
+        element_positions_m: Matriz (N, 3) con posiciones de los elementos.
+        jammer_list: Lista de jammers cuyas direcciones se fuerzan a cero.
+    """
     if len(jammer_list) > config.array.num_elements - 1:
-        raise ValueError("LCMV: número de jammers supera num_elements - 1.")
+        raise ValueError("LCMV: numero de jammers supera num_elements - 1.")
 
     R = compute_sample_covariance(snapshot_matrix)
     R_inv = invert_covariance(R, config.beamforming.diagonal_loading_factor)
@@ -70,7 +85,15 @@ def compute_weights(
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
 ) -> np.ndarray:
-    """Selector único de pesos según config.beamforming.algorithm."""
+    """Selecciona el algoritmo de beamforming configurado y devuelve pesos.
+
+    Parametros:
+        config: Configuracion completa del proyecto; se lee
+            config.beamforming.algorithm.
+        snapshot_matrix: Matriz X de snapshots recibidos.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        jammer_list: Lista de jammers del caso actual, necesaria para LCMV.
+    """
     algorithm = config.beamforming.algorithm.lower()
     if algorithm == "power_inversion":
         return compute_power_inversion_weights(config, snapshot_matrix)

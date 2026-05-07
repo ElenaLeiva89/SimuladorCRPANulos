@@ -1,9 +1,9 @@
 """array_model.py
-Geometría CRPA y steering vectors.
+Geometria CRPA y steering vectors.
 
-Punto de sustitución futura por CRPA real:
+Punto de sustitucion futura por CRPA real:
 - steering_vector() llama ahora a steering_vector_ideal().
-- En el futuro, si steering_model == 'measured', esta función podrá llamar
+- En el futuro, si steering_model == "measured", esta funcion podria llamar
   a un interpolador de diagramas/steering reales.
 """
 
@@ -15,7 +15,14 @@ from .config import ArrayConfig, ProjectConfig
 
 
 def create_crpa_geometry(array_config: ArrayConfig, element_spacing_m: float) -> np.ndarray:
-    """Crea posiciones 3D de la CRPA ideal hexagonal de 7 elementos."""
+    """Crea las posiciones 3D de la CRPA ideal hexagonal de 7 elementos.
+
+    Parametros:
+        array_config: Configuracion geometrica del array; debe indicar
+            geometry="hexagonal_7" y num_elements=7.
+        element_spacing_m: Separacion radial entre el elemento central y
+            cada elemento exterior, expresada en metros.
+    """
     if array_config.geometry != "hexagonal_7" or array_config.num_elements != 7:
         raise ValueError("Actualmente solo se implementa geometry='hexagonal_7' con num_elements=7.")
 
@@ -32,11 +39,11 @@ def create_crpa_geometry(array_config: ArrayConfig, element_spacing_m: float) ->
 
 
 def direction_unit_vector(azimuth_deg: float, elevation_deg: float) -> np.ndarray:
-    """Convierte azimut/elevación a vector unitario 3D.
+    """Convierte azimut/elevacion a vector unitario 3D.
 
-    Convención:
-    - azimut: plano XY, 0 deg hacia +X, positivo antihorario hacia +Y.
-    - elevación: 0 deg horizonte, 90 deg cenit.
+    Parametros:
+        azimuth_deg: Angulo de azimut en grados; 0 apunta a +X y crece hacia +Y.
+        elevation_deg: Angulo de elevacion en grados; 0 es horizonte y 90 cenit.
     """
     az = np.deg2rad(azimuth_deg)
     el = np.deg2rad(elevation_deg)
@@ -44,7 +51,14 @@ def direction_unit_vector(azimuth_deg: float, elevation_deg: float) -> np.ndarra
 
 
 def steering_vector_ideal(element_positions_m: np.ndarray, azimuth_deg: float, elevation_deg: float, wavelength_m: float) -> np.ndarray:
-    """Steering ideal de elementos isotrópicos unitarios."""
+    """Calcula el steering vector ideal para elementos isotropicos.
+
+    Parametros:
+        element_positions_m: Matriz (N, 3) con posiciones XYZ de los elementos.
+        azimuth_deg: Azimut de llegada/salida en grados.
+        elevation_deg: Elevacion de llegada/salida en grados.
+        wavelength_m: Longitud de onda de la portadora en metros.
+    """
     k_rad_m = 2.0 * np.pi / wavelength_m
     u = direction_unit_vector(azimuth_deg, elevation_deg)
     phase_rad = k_rad_m * (element_positions_m @ u)
@@ -52,9 +66,17 @@ def steering_vector_ideal(element_positions_m: np.ndarray, azimuth_deg: float, e
 
 
 def steering_vector(config: ProjectConfig, element_positions_m: np.ndarray, azimuth_deg: float, elevation_deg: float) -> np.ndarray:
-    """Devuelve el steering vector según el modelo seleccionado."""
+    """Devuelve el steering vector segun el modelo configurado.
+
+    Parametros:
+        config: Configuracion completa, usada para escoger el modelo y la
+            longitud de onda.
+        element_positions_m: Matriz (N, 3) con posiciones XYZ del array.
+        azimuth_deg: Azimut de evaluacion en grados.
+        elevation_deg: Elevacion de evaluacion en grados.
+    """
     if config.array.steering_model == "ideal":
         return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, config.signal.wavelength_m)
     if config.array.steering_model == "measured":
-        raise NotImplementedError("steering_model='measured' se añadirá con datos reales de CRPA.")
+        raise NotImplementedError("steering_model='measured' se anadira con datos reales de CRPA.")
     raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")

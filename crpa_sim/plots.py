@@ -1,11 +1,11 @@
 """plots.py
-Figuras de geometría, cortes, mapas 2D y superficies 3D.
+Figuras de geometria, cortes, mapas 2D y superficies 3D.
 
-Se mantiene un estilo similar a la versión previa:
-- títulos en negrita,
+Se mantiene un estilo similar a la version previa:
+- titulos en negrita,
 - etiquetas claras,
-- comparación convencional vs algoritmo,
-- líneas de jammers en los cortes.
+- patron adaptativo,
+- lineas de jammers en los cortes.
 """
 
 from __future__ import annotations
@@ -18,11 +18,22 @@ import pandas as pd
 
 
 def _db_to_radius(response_dB: np.ndarray, min_display_dB: float) -> np.ndarray:
+    """Convierte una respuesta en dB al radio usado por los plots polares.
+
+    Parametros:
+        response_dB: Vector de respuesta normalizada en dB.
+        min_display_dB: Valor minimo visible; las respuestas por debajo se
+            recortan a ese suelo antes de convertir a radio.
+    """
     return np.maximum(response_dB, min_display_dB) - min_display_dB
 
 
 def _crpa_display_labels_clockwise(element_positions_m: np.ndarray) -> list[str]:
-    """Etiquetas visuales: centro=1, +X=2, resto horario."""
+    """Genera etiquetas visuales de elementos: centro=1 y resto horario.
+
+    Parametros:
+        element_positions_m: Matriz (N, 3) con posiciones XYZ del array.
+    """
     x = element_positions_m[:, 0]
     y = element_positions_m[:, 1]
     labels = [""] * len(element_positions_m)
@@ -40,6 +51,12 @@ def _crpa_display_labels_clockwise(element_positions_m: np.ndarray) -> list[str]
 
 
 def plot_array_geometry(element_positions_m: np.ndarray, output_path: Path) -> None:
+    """Dibuja la geometria del array en vista XY y vista 3D.
+
+    Parametros:
+        element_positions_m: Matriz (N, 3) con posiciones XYZ del array.
+        output_path: Ruta PNG donde se guarda la figura.
+    """
     labels = _crpa_display_labels_clockwise(element_positions_m)
     x, y, z = element_positions_m[:, 0], element_positions_m[:, 1], element_positions_m[:, 2]
 
@@ -63,145 +80,184 @@ def plot_array_geometry(element_positions_m: np.ndarray, output_path: Path) -> N
     ax2.set_zlabel("Z (m)", fontsize=10, fontweight="bold")
     ax2.set_title("Vista 3D", fontsize=12, fontweight="bold")
 
-    fig.suptitle("Geometría del Array CRPA de 7 Elementos", fontsize=14, fontweight="bold", y=0.98)
+    fig.suptitle("Geometria del Array CRPA de 7 Elementos", fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_pattern_comparison_azimuth(
-    conventional_pattern: pd.DataFrame,
+def plot_pattern_azimuth(
     adaptive_pattern: pd.DataFrame,
     output_path: Path,
     title: str,
-    jammer_info: list[tuple[str, float]] | None = None,
+    jammer_info: list[tuple[str, float] | tuple[str, float, int]] | None = None,
     adaptive_label: str = "Algoritmo",
     fixed_elevation_deg: float | None = None,
 ) -> None:
-    fig = plt.figure(figsize=(14, 6))
+    """Dibuja un corte polar de patron en azimut.
+
+    Parametros:
+        adaptive_pattern: Tabla con columnas "azimuth_deg" y
+            "response_dB_normalized".
+        output_path: Ruta PNG donde se guarda la figura.
+        title: Titulo superior de la figura.
+        jammer_info: Lista opcional de tuplas (nombre, azimut_deg) o
+            (nombre, azimut_deg, color_idx) para marcar jammers.
+        adaptive_label: Etiqueta de la curva principal en la leyenda.
+        fixed_elevation_deg: Elevacion fija del corte, mostrada en el titulo.
+    """
+    fig = plt.figure(figsize=(7, 7))
     min_display_dB = -50.0
     radial_ticks = [0, 10, 20, 30, 40, 50]
+    jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
 
-    for idx, (data, label, color) in enumerate(
-        [(conventional_pattern, "Convencional", "green"), (adaptive_pattern, adaptive_label, "blue")], start=1
-    ):
-        ax = fig.add_subplot(1, 2, idx, projection="polar")
-        theta = np.deg2rad(data["azimuth_deg"].to_numpy())
-        radius = _db_to_radius(data["response_dB_normalized"].to_numpy(), min_display_dB)
-        ax.plot(theta, radius, linewidth=2, label=label, color=color)
+    ax = fig.add_subplot(1, 1, 1, projection="polar")
+    theta = np.deg2rad(adaptive_pattern["azimuth_deg"].to_numpy())
+    radius = _db_to_radius(adaptive_pattern["response_dB_normalized"].to_numpy(), min_display_dB)
+    ax.plot(theta, radius, linewidth=2, label=adaptive_label, color="blue")
 
-        if idx == 2 and jammer_info:
-            for jammer_name, az in jammer_info:
-                label = f"{jammer_name} ({az:.1f}°)"
-                rad = np.deg2rad(az)
-                rr = np.linspace(0, abs(min_display_dB), 100)
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label,)
+    if jammer_info:
+        for j_idx, item in enumerate(jammer_info):
+            jammer_name, az = item[:2]
+            color_idx = item[2] if len(item) > 2 else j_idx
+            label = f"{jammer_name} ({az:.1f} deg)"
+            rad = np.deg2rad(az)
+            rr = np.linspace(0, abs(min_display_dB), 100)
+            color = jammer_colors[color_idx % len(jammer_colors)]
+            ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label, color=color)
 
-        ax.set_theta_zero_location("E")
-        ax.set_theta_direction(1)
-        ax.set_rlim(0, abs(min_display_dB))
-        ax.set_rticks(radial_ticks)
-        ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
-        ax.grid(True)
-        ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
-        ax.set_title("1. Patrón convencional a el = " f"{fixed_elevation_deg:.1f}°" if idx == 1 else "2. Patrón del algoritmo a el = " f"{fixed_elevation_deg:.1f}°", fontweight="bold", fontsize=12)
+    ax.set_theta_zero_location("E")
+    ax.set_theta_direction(1)
+    ax.set_rlim(0, abs(min_display_dB))
+    ax.set_rticks(radial_ticks)
+    ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
+    ax.grid(True)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
 
+    el_text = f"{fixed_elevation_deg:.1f} deg" if fixed_elevation_deg is not None else "?"
+    ax.set_title(f"Patron {adaptive_label} a el = {el_text}", fontweight="bold", fontsize=12)
     fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_pattern_comparison_elevation(
-    conventional_pattern: pd.DataFrame,
+def plot_pattern_elevation(
     adaptive_pattern: pd.DataFrame,
     output_path: Path,
     title: str,
-    jammer_info: list[tuple[str, float]] | None = None,
+    jammer_info: list[tuple[str, float] | tuple[str, float, int]] | None = None,
     adaptive_label: str = "Algoritmo",
     fixed_azimuth_deg: float | None = None,
 ) -> None:
-    """Corte vertical: izquierda 180°, arriba 90° cenit, derecha 0°."""
-    fig = plt.figure(figsize=(14, 6))
+    """Dibuja un corte polar de patron en elevacion.
+
+    Parametros:
+        adaptive_pattern: Tabla con columnas "elevation_deg" y
+            "response_dB_normalized".
+        output_path: Ruta PNG donde se guarda la figura.
+        title: Titulo superior de la figura.
+        jammer_info: Lista opcional de tuplas (nombre, elevation_deg) o
+            (nombre, elevation_deg, color_idx) para marcar jammers.
+        adaptive_label: Etiqueta de la curva principal en la leyenda.
+        fixed_azimuth_deg: Azimut fijo del corte, mostrado en el titulo.
+    """
+    fig = plt.figure(figsize=(7, 7))
     min_display_dB = -50.0
     radial_ticks = [0, 10, 20, 30, 40, 50]
+    jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
 
-    for idx, (data, label, color) in enumerate(
-        [(conventional_pattern, "Convencional", "green"), (adaptive_pattern, adaptive_label, "blue")], start=1
-    ):
-        ax = fig.add_subplot(1, 2, idx, projection="polar")
-        elevation = data["elevation_deg"].to_numpy()
-        theta = np.deg2rad(90.0 - elevation)
-        radius = _db_to_radius(data["response_dB_normalized"].to_numpy(), min_display_dB)
-        ax.plot(theta, radius, linewidth=2, label=label, color=color)
+    ax = fig.add_subplot(1, 1, 1, projection="polar")
+    elevation = adaptive_pattern["elevation_deg"].to_numpy()
+    theta = np.deg2rad(90.0 - elevation)
+    radius = _db_to_radius(adaptive_pattern["response_dB_normalized"].to_numpy(), min_display_dB)
+    ax.plot(theta, radius, linewidth=2, label=adaptive_label, color="blue")
 
-        if idx == 2 and jammer_info:
-            for jammer_name, el in jammer_info:
-                rad = np.deg2rad(90.0 - el)
-                rr = np.linspace(0, abs(min_display_dB), 100)
-                label = f"{jammer_name} ({el:.1f}°)"
-                ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label,)
+    if jammer_info:
+        for j_idx, item in enumerate(jammer_info):
+            jammer_name, el = item[:2]
+            color_idx = item[2] if len(item) > 2 else j_idx
+            label = f"{jammer_name} ({el:.1f} deg)"
+            rad = np.deg2rad(90.0 - el)
+            rr = np.linspace(0, abs(min_display_dB), 100)
+            color = jammer_colors[color_idx % len(jammer_colors)]
+            ax.plot(np.full_like(rr, rad), rr, "--", linewidth=2, label=label, color=color)
 
-        ax.set_theta_zero_location("N")
-        ax.set_theta_direction(-1)
-        ax.set_thetamin(-90)
-        ax.set_thetamax(90)
-        ax.set_xticks(np.deg2rad([-90, -60, -30, 0, 30, 60, 90]))
-        ax.set_xticklabels(["180°", "150°", "120°", "90°", "60°", "30°", "0°"])
-        ax.set_rlim(0, abs(min_display_dB))
-        ax.set_rticks(radial_ticks)
-        ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
-        ax.grid(True)
-        ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
-        ax.set_title("1. Patrón convencional a az = " f"{fixed_azimuth_deg:.1f}°" if idx == 1 else "2. Patrón del algoritmo a az = " f"{fixed_azimuth_deg:.1f}°", fontweight="bold", fontsize=12)
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+    ax.set_thetamin(-90)
+    ax.set_thetamax(90)
+    ax.set_xticks(np.deg2rad([-90, -60, -30, 0, 30, 60, 90]))
+    ax.set_xticklabels(["180 deg", "150 deg", "120 deg", "90 deg", "60 deg", "30 deg", "0 deg"])
+    ax.set_rlim(0, abs(min_display_dB))
+    ax.set_rticks(radial_ticks)
+    ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
+    ax.grid(True)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.30, 1.15), fontsize=8)
 
+    az_text = f"{fixed_azimuth_deg:.1f} deg" if fixed_azimuth_deg is not None else "?"
+    ax.set_title(f"Patron {adaptive_label} a az = {az_text}", fontweight="bold", fontsize=12)
     fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_heatmap_comparison(conventional_grid: dict[str, np.ndarray], adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6), constrained_layout=True)
-    for ax, grid, label in zip(axes, [conventional_grid, adaptive_grid], ["Convencional", "Algoritmo"]):
-        pcm = ax.pcolormesh(
-            grid["azimuth_deg"],
-            grid["elevation_deg"],
-            grid["response_dB_normalized"],
-            shading="auto",
-            cmap="viridis",
-            vmin=-60,
-            vmax=0,
-        )
-        ax.set_xlabel("Azimut [deg]", fontsize=10, fontweight="bold")
-        ax.set_ylabel("Elevación [deg]", fontsize=10, fontweight="bold")
-        ax.set_title(label, fontsize=12, fontweight="bold")
-        fig.colorbar(pcm, ax=ax, label="Respuesta [dB]")
+def plot_heatmap(adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str, adaptive_label: str = "Algoritmo") -> None:
+    """Dibuja un mapa 2D azimut/elevacion de la respuesta normalizada.
+
+    Parametros:
+        adaptive_grid: Diccionario devuelto por compute_2d_response_grid.
+        output_path: Ruta PNG donde se guarda la figura.
+        title: Titulo superior de la figura.
+        adaptive_label: Etiqueta del mapa, normalmente el algoritmo usado.
+    """
+    fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
+    pcm = ax.pcolormesh(
+        adaptive_grid["azimuth_deg"],
+        adaptive_grid["elevation_deg"],
+        adaptive_grid["response_dB_normalized"],
+        shading="auto",
+        cmap="viridis",
+        vmin=-60,
+        vmax=0,
+    )
+    ax.set_xlabel("Azimut [deg]", fontsize=10, fontweight="bold")
+    ax.set_ylabel("Elevacion [deg]", fontsize=10, fontweight="bold")
+    ax.set_title(adaptive_label, fontsize=12, fontweight="bold")
+    fig.colorbar(pcm, ax=ax, label="Respuesta [dB]")
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_3d_comparison(conventional_grid: dict[str, np.ndarray], adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str) -> None:
-    fig = plt.figure(figsize=(16, 7))
-    for idx, (grid, label) in enumerate([(conventional_grid, "Convencional"), (adaptive_grid, "Algoritmo")], start=1):
-        ax = fig.add_subplot(1, 2, idx, projection="3d")
-        surf = ax.plot_surface(
-            grid["azimuth_deg"],
-            grid["elevation_deg"],
-            grid["response_dB_normalized"],
-            cmap="viridis",
-            linewidth=0,
-            antialiased=True,
-            rcount=100,
-            ccount=100,
-        )
-        ax.set_xlabel("Azimut [deg]", fontsize=9, fontweight="bold")
-        ax.set_ylabel("Elevación [deg]", fontsize=9, fontweight="bold")
-        ax.set_zlabel("Respuesta [dB]", fontsize=9, fontweight="bold")
-        ax.set_zlim(-60, 0)
-        ax.set_title(label, fontsize=12, fontweight="bold")
-        fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
+def plot_3d(adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str, adaptive_label: str = "Algoritmo") -> None:
+    """Dibuja una superficie 3D del patron normalizado en dB.
+
+    Parametros:
+        adaptive_grid: Diccionario devuelto por compute_2d_response_grid.
+        output_path: Ruta PNG donde se guarda la figura.
+        title: Titulo superior de la figura.
+        adaptive_label: Etiqueta de la superficie, normalmente el algoritmo.
+    """
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    surf = ax.plot_surface(
+        adaptive_grid["azimuth_deg"],
+        adaptive_grid["elevation_deg"],
+        adaptive_grid["response_dB_normalized"],
+        cmap="viridis",
+        linewidth=0,
+        antialiased=True,
+        rcount=100,
+        ccount=100,
+    )
+    ax.set_xlabel("Azimut [deg]", fontsize=9, fontweight="bold")
+    ax.set_ylabel("Elevacion [deg]", fontsize=9, fontweight="bold")
+    ax.set_zlabel("Respuesta [dB]", fontsize=9, fontweight="bold")
+    ax.set_zlim(-60, 0)
+    ax.set_title(adaptive_label, fontsize=12, fontweight="bold")
+    fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
@@ -209,6 +265,14 @@ def plot_3d_comparison(conventional_grid: dict[str, np.ndarray], adaptive_grid: 
 
 
 def plot_temporal_spectrum(spectrum_table: pd.DataFrame, output_path: Path, title: str) -> None:
+    """Dibuja el espectro temporal medio de snapshots.
+
+    Parametros:
+        spectrum_table: Tabla con columnas "frequency_hz" y
+            "power_dB_normalized".
+        output_path: Ruta PNG donde se guarda la figura.
+        title: Titulo del grafico.
+    """
     fig, ax = plt.subplots(figsize=(9, 4))
     ax.plot(spectrum_table["frequency_hz"], spectrum_table["power_dB_normalized"], linewidth=1.5)
     ax.set_xlabel("Frecuencia [Hz]", fontsize=10, fontweight="bold")

@@ -1,7 +1,7 @@
 """config.py
-Configuración tipada del simulador CRPA.
+Configuracion tipada del simulador CRPA.
 
-La versión limpia usa un único modo DoA y un único algoritmo por ejecución:
+La version limpia usa un unico modo DoA y un unico algoritmo por ejecucion:
 - simulation_config.doa_mode: "fixed" o "variable"
 - beamforming_config.algorithm: "power_inversion" o "lcmv"
 """
@@ -18,6 +18,11 @@ VALID_ALGORITHMS = {"power_inversion", "lcmv"}
 
 
 def normalize_gnss_band(value: int | str) -> str:
+    """Normaliza la banda GNSS a una etiqueta E5/E6/E1.
+
+    Parametros:
+        value: Banda como entero historico (1, 2, 3) o como texto.
+    """
     if isinstance(value, int):
         return GNSS_BAND_LABELS.get(value, str(value))
     return str(value).strip().upper()
@@ -34,6 +39,11 @@ class ArrayConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "ArrayConfig":
+        """Construye ArrayConfig normalizando tipos y textos.
+
+        Parametros:
+            values: Diccionario leido desde "array_config" del JSON.
+        """
         values = dict(values)
         values["num_elements"] = int(values["num_elements"])
         values["geometry"] = str(values["geometry"]).lower()
@@ -52,10 +62,20 @@ class SignalConfig:
 
     @property
     def band_label(self) -> str:
+        """Etiqueta GNSS normalizada.
+
+        Parametros:
+            No recibe parametros; usa self.gnss_band.
+        """
         return normalize_gnss_band(self.gnss_band)
 
     @property
     def carrier_frequency_hz(self) -> float:
+        """Frecuencia portadora en Hz asociada a la banda GNSS.
+
+        Parametros:
+            No recibe parametros; usa self.band_label.
+        """
         label = self.band_label
         if label not in GNSS_CARRIER_FREQUENCIES_HZ:
             raise ValueError(f"Banda GNSS no soportada: {self.gnss_band}")
@@ -63,10 +83,20 @@ class SignalConfig:
 
     @property
     def wavelength_m(self) -> float:
+        """Longitud de onda en metros.
+
+        Parametros:
+            No recibe parametros; usa speed_of_light_m_s y carrier_frequency_hz.
+        """
         return self.speed_of_light_m_s / self.carrier_frequency_hz
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "SignalConfig":
+        """Construye SignalConfig convirtiendo campos numericos.
+
+        Parametros:
+            values: Diccionario leido desde "signal_config" del JSON.
+        """
         values = dict(values)
         values["num_snapshots"] = int(values["num_snapshots"])
         if values.get("fft_size") is not None:
@@ -82,6 +112,11 @@ class SimulationConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "SimulationConfig":
+        """Construye SimulationConfig y valida el modo DoA.
+
+        Parametros:
+            values: Diccionario leido desde "simulation_config" del JSON.
+        """
         values = dict(values)
         values["num_montecarlo"] = int(values["num_montecarlo"])
         values["random_seed"] = int(values["random_seed"])
@@ -101,6 +136,11 @@ class BeamformingConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "BeamformingConfig":
+        """Construye BeamformingConfig y valida el algoritmo.
+
+        Parametros:
+            values: Diccionario leido desde "beamforming_config" del JSON.
+        """
         values = dict(values)
         values["algorithm"] = str(values.get("algorithm", "lcmv")).lower()
         if values["algorithm"] not in VALID_ALGORITHMS:
@@ -121,6 +161,11 @@ class ScanConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "ScanConfig":
+        """Construye ScanConfig y normaliza umbrales de nulo.
+
+        Parametros:
+            values: Diccionario leido desde "scan_config" del JSON.
+        """
         values = dict(values)
         values["null_thresholds_dB"] = [float(x) for x in values.get("null_thresholds_dB", [-10, -20, -30, -40])]
         return cls(**values)
@@ -132,6 +177,11 @@ class NoiseConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "NoiseConfig":
+        """Construye NoiseConfig.
+
+        Parametros:
+            values: Diccionario leido desde "noise_config" del JSON.
+        """
         return cls(**values)
 
 
@@ -147,6 +197,11 @@ class JammerTemplate:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "JammerTemplate":
+        """Construye una plantilla de jammer definida en configuracion.
+
+        Parametros:
+            values: Diccionario de un elemento de "base_jammers".
+        """
         values = dict(values)
         values["signal_type"] = str(values.get("signal_type", "complex_gaussian")).lower()
         values.setdefault("normalized_frequency", 0.0)
@@ -166,6 +221,7 @@ class JammerInstance:
     bandwidth_hz: float | None = None
     chirp_frequency: float | None = None
 
+
 @dataclass(frozen=True)
 class JammerConfig:
     num_jammers: int
@@ -176,6 +232,11 @@ class JammerConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "JammerConfig":
+        """Construye JammerConfig y sus plantillas de jammers.
+
+        Parametros:
+            values: Diccionario leido desde "jammer_config" del JSON.
+        """
         values = dict(values)
         values["num_jammers"] = int(values["num_jammers"])
         values["jnr_dB"] = float(values["jnr_dB"])
@@ -196,6 +257,11 @@ class OutputConfig:
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "OutputConfig":
+        """Construye OutputConfig.
+
+        Parametros:
+            values: Diccionario leido desde "output_config" del JSON.
+        """
         return cls(**values)
 
 
@@ -212,4 +278,9 @@ class ProjectConfig:
 
     @property
     def element_spacing_m(self) -> float:
+        """Separacion fisica entre centro y elementos exteriores.
+
+        Parametros:
+            No recibe parametros; usa element_spacing_over_lambda y wavelength_m.
+        """
         return self.array.element_spacing_over_lambda * self.signal.wavelength_m

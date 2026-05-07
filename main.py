@@ -1,10 +1,10 @@
 """main.py
-Simulador CRPA ideal orientada al cenit para evaluación de nulos.
+Simulador CRPA ideal orientada al cenit para evaluacion de nulos.
 
-Versión limpia:
-- un único doa_mode por ejecución: fixed o variable;
-- un único algoritmo por ejecución: power_inversion o lcmv;
-- logs y ficheros similares a la versión modular inicial;
+Version limpia:
+- un unico doa_mode por ejecucion: fixed o variable;
+- un unico algoritmo por ejecucion: power_inversion o lcmv;
+- logs y ficheros similares a la version modular inicial;
 - plots globales y plots por jammer;
 - CSV final de profundidad y anchos de nulo por jammer y umbral.
 """
@@ -18,6 +18,7 @@ import pandas as pd
 
 from crpa_sim.array_model import create_crpa_geometry
 from crpa_sim.beamformers import compute_weights
+from crpa_sim.config import JammerInstance, ProjectConfig
 from crpa_sim.covariance import compute_sample_covariance
 from crpa_sim.fft_tools import temporal_fft_snapshot_matrix
 from crpa_sim.io_utils import (
@@ -30,7 +31,7 @@ from crpa_sim.io_utils import (
     save_run_log,
 )
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
-from crpa_sim.null_metrics import (compute_null_metrics_for_jammers, summarize_null_metrics, compute_null_depth_dB,)
+from crpa_sim.null_metrics import compute_null_metrics_for_jammers, summarize_null_metrics
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
@@ -39,35 +40,54 @@ from crpa_sim.patterns import (
     make_scan_vectors,
 )
 from crpa_sim.plots import (
-    plot_3d_comparison,
+    plot_3d,
     plot_array_geometry,
-    plot_heatmap_comparison,
-    plot_pattern_comparison_azimuth,
-    plot_pattern_comparison_elevation,
+    plot_heatmap,
+    plot_pattern_azimuth,
+    plot_pattern_elevation,
     plot_temporal_spectrum,
 )
 
 
 def _case_rng(base_seed: int, montecarlo_index: int) -> np.random.Generator:
-    """Generador reproducible para cada iteración Monte Carlo."""
+    """Crea un generador reproducible para una iteracion Monte Carlo.
+
+    Parametros:
+        base_seed: Semilla base definida en la configuracion.
+        montecarlo_index: Indice de la iteracion, empezando en 1.
+    """
     seed = (int(base_seed) * 1664525 + int(montecarlo_index) * 1013904223) % (2**32)
     return np.random.default_rng(seed)
 
 
 def _save_global_outputs(
-    config,
+    config: ProjectConfig,
     output_dir: Path,
     element_positions_m: np.ndarray,
     snapshot_matrix: np.ndarray,
     covariance_matrix: np.ndarray,
     selected_weights: np.ndarray,
     conventional_w: np.ndarray,
-    jammer_list,
+    jammer_list: list[JammerInstance],
     jammer_table: pd.DataFrame,
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
 ) -> None:
-    """Guarda ficheros globales de la primera iteración MC."""
+    """Guarda ficheros globales de la primera iteracion Monte Carlo.
+
+    Parametros:
+        config: Configuracion completa del proyecto.
+        output_dir: Directorio raiz de salida.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        snapshot_matrix: Matriz X recibida para el caso actual.
+        covariance_matrix: Covarianza espacial estimada desde X.
+        selected_weights: Pesos del algoritmo seleccionado.
+        conventional_w: Pesos convencionales de referencia.
+        jammer_list: Lista de jammers del caso actual.
+        jammer_table: Tabla descriptiva de los jammers generados.
+        azimuth_scan_deg: Vector de azimuts para cortes.
+        elevation_scan_deg: Vector de elevaciones para cortes.
+    """
     sep = config.output.csv_separator
     dec = config.output.csv_decimal
     output_dir_data = output_dir / "output_data"
@@ -90,28 +110,14 @@ def _save_global_outputs(
     if config.output.save_plots:
         plot_array_geometry(element_positions_m, output_dir / "array_geometry.png")
 
-        conv_az = compute_azimuth_response_cut(
-            config,
-            element_positions_m,
-            conventional_w,
-            azimuth_scan_deg,
-            fixed_elevation_deg=config.beamforming.desired_elevation_deg,
-        )
-        sel_az = compute_azimuth_response_cut(
+        radiation_az = compute_azimuth_response_cut(
             config,
             element_positions_m,
             selected_weights,
             azimuth_scan_deg,
             fixed_elevation_deg=config.beamforming.desired_elevation_deg,
         )
-        conv_el = compute_elevation_response_cut(
-            config,
-            element_positions_m,
-            conventional_w,
-            elevation_scan_deg,
-            fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
-        )
-        sel_el = compute_elevation_response_cut(
+        radiation_el = compute_elevation_response_cut(
             config,
             element_positions_m,
             selected_weights,
@@ -119,22 +125,28 @@ def _save_global_outputs(
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
-        jammer_az = list(zip(jammer_table["name"], jammer_table["azimuth_deg"])) if not jammer_table.empty else []
-        jammer_el = list(zip(jammer_table["name"], jammer_table["elevation_deg"])) if not jammer_table.empty else []
-        title = f"Patron de radiación de CRPA 7 elementos y direcciones de jammers - {config.signal.band_label}"
+        # jammer_az = list(zip(jammer_table["name"], jammer_table["azimuth_deg"])) if not jammer_table.empty else []
+        # jammer_el = list(zip(jammer_table["name"], jammer_table["elevation_deg"])) if not jammer_table.empty else []
+        jammer_az = ([(row["name"], row["azimuth_deg"], int(row["jammer_index"]) - 1) 
+                for _, row in jammer_table.iterrows()]
+                    if not jammer_table.empty
+                    else [])
+        jammer_el = ([(row["name"], row["elevation_deg"], int(row["jammer_index"]) - 1)
+                for _, row in jammer_table.iterrows()]
+                    if not jammer_table.empty
+                    else [])
+        title = f"Patron de radiacion de CRPA 7 elementos \ny direcciones de jammers - {config.signal.band_label}"
 
-        plot_pattern_comparison_azimuth(
-            conv_az,
-            sel_az,
+        plot_pattern_azimuth(
+            radiation_az,
             output_dir / "pattern_global_azimuth_dB.png",
             title + " - Azimuth",
             jammer_az,
             adaptive_label=config.beamforming.algorithm,
             fixed_elevation_deg=config.beamforming.desired_elevation_deg,
         )
-        plot_pattern_comparison_elevation(
-            conv_el,
-            sel_el,
+        plot_pattern_elevation(
+            radiation_el,
             output_dir / "pattern_global_elevation_dB.png",
             title + " - Elevation",
             jammer_el,
@@ -142,31 +154,35 @@ def _save_global_outputs(
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
-        # conv_grid = compute_2d_response_grid(config, element_positions_m, conventional_w, azimuth_scan_deg, elevation_scan_deg)
-        # sel_grid = compute_2d_response_grid(config, element_positions_m, selected_weights, azimuth_scan_deg, elevation_scan_deg)
-        # plot_heatmap_comparison(conv_grid, sel_grid, output_dir / "array_factor_heatmap.png", title + " - Mapa 2D")
-        # plot_3d_comparison(conv_grid, sel_grid, output_dir / "pattern_3d_comparison.png", title + " - Patrón 3D")
-
-        
         spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, config.signal.sample_rate_hz, config.signal.fft_size)
         plot_temporal_spectrum(spectrum, output_dir / "temporal_fft_snapshot_spectrum.png", "FFT temporal media de snapshots")
         if config.output.save_csv:
             save_dataframe(spectrum, output_dir_data / "temporal_fft_snapshot_spectrum.csv", sep, dec)
 
+
 def _save_jammer_plots(
-    config,
+    config: ProjectConfig,
     output_dir: Path,
     element_positions_m: np.ndarray,
     selected_weights: np.ndarray,
     conventional_w: np.ndarray,
-    jammer_list,
+    jammer_list: list[JammerInstance],
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
     montecarlo_index: int,
 ) -> None:
-    """Genera plots de radiación y patrón 3D específicos por jammer.
+    """Genera plots especificos por jammer para la primera iteracion.
 
-    Solo se generan para la primera iteración MC para evitar miles de imágenes.
+    Parametros:
+        config: Configuracion completa del proyecto.
+        output_dir: Directorio raiz de salida.
+        element_positions_m: Matriz (N, 3) con posiciones del array.
+        selected_weights: Pesos del algoritmo seleccionado.
+        conventional_w: Pesos convencionales disponibles como referencia.
+        jammer_list: Lista de jammers del caso actual.
+        azimuth_scan_deg: Vector de azimuts para cortes.
+        elevation_scan_deg: Vector de elevaciones para cortes.
+        montecarlo_index: Indice de la iteracion Monte Carlo actual.
     """
     if not config.output.save_plots or montecarlo_index != 1:
         return
@@ -179,55 +195,47 @@ def _save_jammer_plots(
         jam_dir = jammer_plots_dir
         jam_dir.mkdir(parents=True, exist_ok=True)
 
-        conv_az = compute_azimuth_response_cut(config, element_positions_m, conventional_w, azimuth_scan_deg, jammer.elevation_deg)
-        sel_az = compute_azimuth_response_cut(config, element_positions_m, selected_weights, azimuth_scan_deg, jammer.elevation_deg)
-        conv_el = compute_elevation_response_cut(config, element_positions_m, conventional_w, elevation_scan_deg, jammer.azimuth_deg)
-        sel_el = compute_elevation_response_cut(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
+        radiation_az = compute_azimuth_response_cut(config, element_positions_m, selected_weights, azimuth_scan_deg, jammer.elevation_deg)
+        radiation_el = compute_elevation_response_cut(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
 
-        null_depth_dB = compute_null_depth_dB(
-            config,
-            element_positions_m,
-            selected_weights,
-            jammer,
-            reference_gain_abs=1.0,
-        )
-
-        title_base = f"{tag} - az={jammer.azimuth_deg:.1f}°, el={jammer.elevation_deg:.1f}° - {config.beamforming.algorithm}"
-        plot_pattern_comparison_azimuth(
-            conv_az,
-            sel_az,
+        title_base = f"{tag} - az={jammer.azimuth_deg:.1f} deg, el={jammer.elevation_deg:.1f} deg - {config.beamforming.algorithm}"
+        plot_pattern_azimuth(
+            radiation_az,
             jam_dir / f"{tag}_pattern_azimuth_dB.png",
-            title_base + " - Corte azimut por jammer",
-            [(jammer.name, jammer.azimuth_deg)],
+            title_base + " \nCorte azimut por jammer",
+            [(jammer.name, jammer.azimuth_deg, idx - 1)],
             adaptive_label=config.beamforming.algorithm,
             fixed_elevation_deg=jammer.elevation_deg,
         )
-        plot_pattern_comparison_elevation(
-            conv_el,
-            sel_el,
+        plot_pattern_elevation(
+            radiation_el,
             jam_dir / f"{tag}_pattern_elevation_dB.png",
-            title_base + " - Corte elevación por jammer",
-            [(jammer.name, jammer.elevation_deg)],
+            title_base + " \nCorte elevacion por jammer",
+            [(jammer.name, jammer.elevation_deg, idx - 1)],
             adaptive_label=config.beamforming.algorithm,
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
 
-        conv_grid = compute_2d_response_grid(config, element_positions_m, conventional_w, azimuth_scan_deg, elevation_scan_deg)
-        sel_grid = compute_2d_response_grid(config, element_positions_m, selected_weights, azimuth_scan_deg, elevation_scan_deg)
-        plot_3d_comparison(conv_grid, sel_grid, jam_dir / f"{tag}_pattern_3d_comparison.png", title_base + " - Patrón 3D")
-        plot_heatmap_comparison(conv_grid, sel_grid, jam_dir / f"{tag}_array_factor_heatmap.png", title_base + " - Mapa 2D")
+    radiation_grid = compute_2d_response_grid(config, element_positions_m, selected_weights, azimuth_scan_deg, elevation_scan_deg)
+    plot_3d(radiation_grid, output_dir / f"{tag}_pattern_3d_comparison.png", "Patron 3D CRPA para algoritmo " + config.beamforming.algorithm)
+    plot_heatmap(radiation_grid, output_dir / f"{tag}_array_factor_heatmap.png", f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D")
 
 
 def run_project(config_path: Path = Path("input_config.json")) -> None:
+    """Ejecuta la simulacion completa a partir de un fichero JSON.
+
+    Parametros:
+        config_path: Ruta del fichero de configuracion de entrada.
+    """
     config = load_project_config(config_path)
     output_dir = ensure_output_dir(config.output.output_dir)
     save_config_used(config, output_dir)
 
-    print("/////////////////////// INICIANDO SIMULACIÓN CRPA ///////////////////////")
+    print("/////////////////////// INICIANDO SIMULACION CRPA ///////////////////////")
     print(f"Salida: {output_dir.resolve()}")
     print(f"DoA mode: {config.simulation.doa_mode}")
     print(f"Algoritmo: {config.beamforming.algorithm}")
-    print(f"Número de jammers: {config.jammer.num_jammers}")
+    print(f"Numero de jammers: {config.jammer.num_jammers}")
 
     element_positions_m = create_crpa_geometry(config.array, config.element_spacing_m)
     azimuth_scan_deg, elevation_scan_deg = make_scan_vectors(config)
@@ -298,13 +306,12 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
 
     metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
     metrics_summary = summarize_null_metrics(metrics_full) if not metrics_full.empty else pd.DataFrame()
-    
-    #save_dataframe(metrics_full, output_dir_data / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
+
     save_dataframe(metrics_summary, output_dir / "null_metrics_summary.csv", config.output.csv_separator, config.output.csv_decimal)
 
     save_run_log(config, output_dir, summary_rows)
     print_generated_files(output_dir)
-    print("/////////////////////// SIMULACIÓN CRPA COMPLETADA ///////////////////////")
+    print("/////////////////////// SIMULACION CRPA COMPLETADA ///////////////////////")
 
 
 if __name__ == "__main__":

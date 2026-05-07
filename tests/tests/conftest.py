@@ -1,12 +1,21 @@
 import json
 from dataclasses import replace
+
+import matplotlib
 import numpy as np
 import pytest
 from crpa_sim.config import ArrayConfig, BeamformingConfig, JammerConfig, NoiseConfig, OutputConfig, ProjectConfig, ScanConfig, SignalConfig, SimulationConfig
 from crpa_sim.array_model import create_crpa_geometry
 
+matplotlib.use("Agg")
+
 @pytest.fixture
 def project_config(tmp_path):
+    """Crea una configuracion base reutilizable para tests.
+
+    Parametros:
+        tmp_path: Directorio temporal de pytest para salidas.
+    """
     return ProjectConfig(
         array=ArrayConfig(7, "hexagonal_7", "isotropic", 0.5, 90.0, "ideal"),
         signal=SignalConfig("E1", 299792458.0, 64_000_000.0, 256, 512),
@@ -30,27 +39,58 @@ def project_config(tmp_path):
 
 @pytest.fixture
 def variable_project_config(project_config):
+    """Devuelve la configuracion base con doa_mode variable.
+
+    Parametros:
+        project_config: Fixture con la configuracion base.
+    """
     return replace(project_config, simulation=replace(project_config.simulation, doa_mode="variable"))
 
 @pytest.fixture
 def power_inversion_config(project_config):
+    """Devuelve la configuracion base usando Power Inversion.
+
+    Parametros:
+        project_config: Fixture con la configuracion base.
+    """
     return replace(project_config, beamforming=replace(project_config.beamforming, algorithm="power_inversion"))
 
 @pytest.fixture
 def element_positions_m(project_config):
+    """Calcula posiciones del array para la configuracion base.
+
+    Parametros:
+        project_config: Fixture con la configuracion base.
+    """
     return create_crpa_geometry(project_config.array, project_config.element_spacing_m)
 
 @pytest.fixture
 def rng():
+    """Crea un generador aleatorio determinista para tests.
+
+    Parametros:
+        No recibe parametros.
+    """
     return np.random.default_rng(12345)
 
 @pytest.fixture
 def jammer_list(project_config, rng):
+    """Construye la lista de jammers del caso base.
+
+    Parametros:
+        project_config: Fixture con la configuracion base.
+        rng: Generador aleatorio determinista.
+    """
     from crpa_sim.jammers import build_jammer_case
     return build_jammer_case(project_config, rng)
 
 @pytest.fixture
 def config_json_path(tmp_path):
+    """Escribe un JSON de configuracion temporal y devuelve su ruta.
+
+    Parametros:
+        tmp_path: Directorio temporal de pytest para crear el fichero.
+    """
     path = tmp_path / "input_config.json"
     data = {
         "array_config": {"num_elements": 7, "geometry": "hexagonal_7", "element_type": "isotropic", "element_spacing_over_lambda": 0.5, "array_boresight_elevation_deg": 90.0, "steering_model": "ideal"},
