@@ -59,8 +59,8 @@ def test_plots_create_files(project_config, element_positions_m, tmp_path):
     plot_array_geometry(element_positions_m, outputs[0])
     plot_pattern_azimuth(az_df, outputs[1], "az", [("Jammer_1", 40), ("Jammer_2", 70, 3)])
     plot_pattern_elevation(el_df, outputs[2], "el", [("Jammer_1", 10), ("Jammer_2", 30, 4)])
-    plot_heatmap(grid, outputs[3], "heat")
-    plot_3d(grid, outputs[4], "3d")
+    plot_heatmap(grid, outputs[3], "heat", jammer_info=[("Jammer_1", 40.0, 10.0), ("Jammer_2", 70.0, 30.0, 3)])
+    plot_3d(grid, outputs[4], "3d", jammer_info=[("Jammer_1", 40.0, 10.0), ("Jammer_2", 70.0, 30.0, 3)])
     plot_temporal_spectrum(pd.DataFrame({"frequency_hz": np.arange(10), "power_dB_normalized": np.linspace(-30,0,10)}), outputs[5], "fft")
     assert all(p.exists() and p.stat().st_size > 0 for p in outputs)
 
@@ -106,6 +106,10 @@ def test_main_run_project_light(config_json_path):
         "attenuation_threshold_dB",
         "null_width_azimuth_deg",
         "null_width_elevation_deg",
+        "null_area_cells_2d",
+        "null_area_deg2_2d",
+        "null_width_azimuth_2d_deg",
+        "null_width_elevation_2d_deg",
     ]
     assert len(summary) == len(cfg.jammer.base_jammers[: cfg.jammer.num_jammers]) * len(cfg.scan.null_thresholds_dB)
     assert (out / "output_data" / "element_positions_m.csv").exists()

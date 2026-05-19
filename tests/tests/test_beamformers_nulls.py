@@ -5,7 +5,7 @@ import pytest
 from crpa_sim.array_model import steering_vector
 from crpa_sim.beamformers import compute_lcmv_weights, compute_power_inversion_weights, compute_weights
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
-from crpa_sim.null_metrics import compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_width_1d, summarize_null_metrics
+from crpa_sim.null_metrics import circular_azimuth_width_deg, compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_region_2d, measure_null_width_1d, summarize_null_metrics
 from crpa_sim.patterns import make_scan_vectors
 
 def test_power_inversion_and_lcmv(project_config, power_inversion_config, element_positions_m, rng):
@@ -75,6 +75,12 @@ def test_null_metrics(project_config, element_positions_m, rng):
     metrics, cuts = compute_null_metrics_for_jammers(project_config, element_positions_m, w, jammers, az, el, 1)
     assert len(metrics) == len(jammers) * len(project_config.scan.null_thresholds_dB)
     assert len(cuts) == len(jammers) * 2
+    assert {
+        "null_area_cells_2d",
+        "null_area_deg2_2d",
+        "null_width_azimuth_2d_deg",
+        "null_width_elevation_2d_deg",
+    }.issubset(metrics.columns)
     summary = summarize_null_metrics(metrics)
     assert not summary.empty
 
@@ -108,6 +114,53 @@ def test_null_width_edge_cases_and_floor(project_config, element_positions_m):
     assert compute_null_depth_dB(project_config, element_positions_m, zero_weights, jammer, floor_dB=-80.0) == pytest.approx(-80.0)
 
 
+def test_null_region_2d_edge_cases_and_azimuth_wrap():
+    """Cubre regiones 2D degeneradas y continuidad circular en azimut.
+
+    Parametros:
+        No recibe parametros.
+    """
+    assert circular_azimuth_width_deg(np.array([])) == pytest.approx(0.0)
+    assert circular_azimuth_width_deg(np.array([42.0])) == pytest.approx(0.0)
+    assert circular_azimuth_width_deg(np.array([359.0, 0.0, 1.0])) == pytest.approx(2.0)
+
+    az_grid, el_grid = np.meshgrid(
+        np.array([-180.0, -179.0, 179.0, 180.0]),
+        np.array([0.0, 1.0]),
+        indexing="xy",
+    )
+    response = np.zeros_like(az_grid, dtype=float)
+    response[0, :] = -30.0
+
+    region = measure_null_region_2d(
+        az_grid,
+        el_grid,
+        response,
+        jammer_azimuth_deg=-179.5,
+        jammer_elevation_deg=0.0,
+        threshold_dB=-20.0,
+    )
+    assert region["null_area_cells_2d"] == 4
+    assert region["null_area_deg2_2d"] == pytest.approx(4.0)
+    assert region["null_width_azimuth_2d_deg"] == pytest.approx(2.0)
+    assert region["null_width_elevation_2d_deg"] == pytest.approx(0.0)
+
+    empty_region = measure_null_region_2d(
+        az_grid,
+        el_grid,
+        np.zeros_like(az_grid, dtype=float),
+        jammer_azimuth_deg=0.0,
+        jammer_elevation_deg=0.0,
+        threshold_dB=-20.0,
+    )
+    assert empty_region == {
+        "null_area_cells_2d": None,
+        "null_area_deg2_2d": None,
+        "null_width_azimuth_2d_deg": None,
+        "null_width_elevation_2d_deg": None,
+    }
+
+
 def test_null_metrics_empty_inputs():
     """Comprueba que el resumen tolera tablas vacias con columnas esperadas.
 
@@ -120,6 +173,10 @@ def test_null_metrics_empty_inputs():
             "attenuation_threshold_dB",
             "null_width_azimuth_deg",
             "null_width_elevation_deg",
+            "null_area_cells_2d",
+            "null_area_deg2_2d",
+            "null_width_azimuth_2d_deg",
+            "null_width_elevation_2d_deg",
         ]
     )
     summary = summarize_null_metrics(metrics)

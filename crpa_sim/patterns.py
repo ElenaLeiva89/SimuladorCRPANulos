@@ -155,15 +155,15 @@ def compute_2d_response_grid(
         response_complex = np.asarray(response_complex)
 
     response_abs = np.abs(response_complex).reshape(az_grid.shape)
-    response_norm = response_abs / (np.max(response_abs) + 1e-15)
-    response_dB = 20.0 * np.log10(response_norm + 1e-12)
+    response_power = response_abs**2
+    response_power_dB = 10.0 * np.log10(response_power + 1e-12)
 
     return {
         "azimuth_deg": az_grid,
         "elevation_deg": el_grid,
         "response_abs": response_abs,
-        "response_abs_normalized": response_norm,
-        "response_dB_normalized": response_dB,
+        "response_power": response_power,
+        "response_power_dB": response_power_dB,
     }
 
 

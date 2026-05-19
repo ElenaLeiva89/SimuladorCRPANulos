@@ -11,7 +11,7 @@ import pandas as pd
 
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
-from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut
+from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_2d_response_grid
 
 
 def compute_null_depth_dB(
@@ -88,6 +88,16 @@ def compute_null_metrics_for_jammers(
     rows: list[dict] = []
     cuts: dict[str, pd.DataFrame] = {}
 
+    grid_2d = compute_2d_response_grid(
+        config,
+        element_positions_m,
+        weights,
+        azimuth_scan_deg,
+        elevation_scan_deg,
+    )
+
+    response_2d_dB = grid_2d["response_power_dB"]
+
     for jammer_index, jammer in enumerate(jammer_list, start=1):
         az_cut = compute_azimuth_response_cut(
             config,
@@ -124,6 +134,14 @@ def compute_null_metrics_for_jammers(
                 jammer.elevation_deg,
                 threshold,
             )
+            region_2d = measure_null_region_2d(
+                grid_2d["azimuth_deg"],
+                grid_2d["elevation_deg"],
+                response_2d_dB,
+                jammer.azimuth_deg,
+                jammer.elevation_deg,
+                threshold,
+            )
             rows.append(
                 {
                     "jammer_name": jammer.name,
@@ -134,6 +152,10 @@ def compute_null_metrics_for_jammers(
                     "attenuation_threshold_dB": threshold,
                     "null_width_azimuth_deg": width_az,
                     "null_width_elevation_deg": width_el,
+                    "null_area_cells_2d": region_2d["null_area_cells_2d"],
+                    "null_area_deg2_2d": region_2d["null_area_deg2_2d"],
+                    "null_width_azimuth_2d_deg": region_2d["null_width_azimuth_2d_deg"],
+                    "null_width_elevation_2d_deg": region_2d["null_width_elevation_2d_deg"],
                 }
             )
 
@@ -155,6 +177,10 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = [
         "null_width_azimuth_deg",
         "null_width_elevation_deg",
+        "null_area_cells_2d",
+        "null_area_deg2_2d",
+        "null_width_azimuth_2d_deg",
+        "null_width_elevation_2d_deg",
     ]
 
     return metrics.groupby(group_cols, dropna=False)[numeric_cols].mean().reset_index()
@@ -162,3 +188,111 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
 def wrap_angle_180(angle_deg: float) -> float:
     """Normaliza un azimut al rango [-180, 180)."""
     return ((angle_deg + 180.0) % 360.0) - 180.0
+
+def circular_azimuth_width_deg(angles_deg: np.ndarray) -> float:
+    """Calcula anchura angular mínima teniendo en cuenta wrap-around."""
+
+    angles = np.mod(angles_deg, 360.0)
+    angles = np.sort(angles)
+    if len(angles) <= 1:
+        return 0.0
+
+    diffs = np.diff(angles)
+    wrap_gap = 360.0 - (angles[-1] - angles[0])
+
+    max_gap = max(np.max(diffs), wrap_gap)
+
+    return float(360.0 - max_gap)
+
+def measure_null_region_2d(
+    az_grid_deg: np.ndarray,
+    el_grid_deg: np.ndarray,
+    response_dB: np.ndarray,
+    jammer_azimuth_deg: float,
+    jammer_elevation_deg: float,
+    threshold_dB: float,
+) -> dict:
+    """Mide la region 2D del nulo alrededor del jammer en la malla az/el."""
+
+    jammer_azimuth_deg = wrap_angle_180(jammer_azimuth_deg)
+
+    az_grid_deg = np.asarray(az_grid_deg, dtype=float)
+    el_grid_deg = np.asarray(el_grid_deg, dtype=float)
+    response_dB = np.asarray(response_dB, dtype=float)
+
+    az_delta = ((az_grid_deg - jammer_azimuth_deg + 180.0) % 360.0) - 180.0
+    dist = (
+        az_delta ** 2
+        + (el_grid_deg - jammer_elevation_deg) ** 2
+    )
+
+    start = np.unravel_index(np.argmin(dist), dist.shape)
+
+    if response_dB[start] > threshold_dB:
+        return {
+            "null_area_cells_2d": None,
+            "null_area_deg2_2d": None,
+            "null_width_azimuth_2d_deg": None,
+            "null_width_elevation_2d_deg": None,
+        }
+
+    mask = response_dB <= threshold_dB
+    visited = np.zeros(mask.shape, dtype=bool)
+    az_axis = az_grid_deg[0, :] if az_grid_deg.ndim == 2 and az_grid_deg.shape[1] > 0 else np.asarray([])
+    az_step = float(np.nanmedian(np.abs(np.diff(az_axis)))) if len(az_axis) > 1 else 0.0
+    az_span = float(np.nanmax(az_axis) - np.nanmin(az_axis)) if len(az_axis) > 1 else 0.0
+    wrap_azimuth = len(az_axis) > 1 and az_span >= 360.0 - max(az_step, 1e-9)
+
+    stack = [start]
+    region = []
+
+    while stack:
+        row, col = stack.pop()
+
+        if row < 0 or row >= mask.shape[0]:
+            continue
+        if col < 0 or col >= mask.shape[1]:
+            continue
+        if visited[row, col]:
+            continue
+        if not mask[row, col]:
+            continue
+
+        visited[row, col] = True
+        region.append((row, col))
+
+        stack.append((row - 1, col))
+        stack.append((row + 1, col))
+        if wrap_azimuth:
+            stack.append((row, (col - 1) % mask.shape[1]))
+            stack.append((row, (col + 1) % mask.shape[1]))
+        else:
+            stack.append((row, col - 1))
+            stack.append((row, col + 1))
+
+    if not region:
+        return {
+            "null_area_cells_2d": None,
+            "null_area_deg2_2d": None,
+            "null_width_azimuth_2d_deg": None,
+            "null_width_elevation_2d_deg": None,
+        }
+
+    rows = np.array([p[0] for p in region])
+    cols = np.array([p[1] for p in region])
+
+    az_vals = az_grid_deg[rows, cols]
+    el_vals = el_grid_deg[rows, cols]
+
+    az_step = float(np.nanmedian(np.abs(np.diff(az_grid_deg[0, :]))))
+    el_step = float(np.nanmedian(np.abs(np.diff(el_grid_deg[:, 0]))))
+
+    area_cells = len(region)
+    area_deg2 = area_cells * az_step * el_step
+
+    return {
+        "null_area_cells_2d": area_cells,
+        "null_area_deg2_2d": area_deg2,
+        "null_width_azimuth_2d_deg": circular_azimuth_width_deg(az_vals),
+        "null_width_elevation_2d_deg": float(np.max(el_vals) - np.min(el_vals)),
+    }

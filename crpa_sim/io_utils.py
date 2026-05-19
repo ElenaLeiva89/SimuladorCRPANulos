@@ -69,6 +69,28 @@ def validate_project_config(config: ProjectConfig) -> None:
     """
     if config.array.num_elements != 7 or config.array.geometry != "hexagonal_7":
         raise ValueError("Esta version implementa una CRPA hexagonal de 7 elementos.")
+    if config.array.element_spacing_over_lambda <= 0:
+        raise ValueError("element_spacing_over_lambda debe ser > 0.")
+    if config.signal.speed_of_light_m_s <= 0:
+        raise ValueError("speed_of_light_m_s debe ser > 0.")
+    if config.signal.sample_rate_hz <= 0:
+        raise ValueError("sample_rate_hz debe ser > 0.")
+    if config.signal.num_snapshots <= 0:
+        raise ValueError("num_snapshots debe ser > 0.")
+    if config.signal.fft_size is not None and config.signal.fft_size <= 0:
+        raise ValueError("fft_size debe ser > 0 o null.")
+    if config.simulation.num_montecarlo < 1:
+        raise ValueError("num_montecarlo debe ser >= 1.")
+    if config.beamforming.diagonal_loading_factor < 0:
+        raise ValueError("diagonal_loading_factor debe ser >= 0.")
+    if config.scan.azimuth_scan_step_deg <= 0 or config.scan.elevation_scan_step_deg <= 0:
+        raise ValueError("Los pasos de scan angular deben ser > 0.")
+    if config.scan.azimuth_scan_min_deg > config.scan.azimuth_scan_max_deg:
+        raise ValueError("azimuth_scan_min_deg debe ser <= azimuth_scan_max_deg.")
+    if config.scan.elevation_scan_min_deg > config.scan.elevation_scan_max_deg:
+        raise ValueError("elevation_scan_min_deg debe ser <= elevation_scan_max_deg.")
+    if config.noise.noise_power_linear < 0:
+        raise ValueError("noise_power_linear debe ser >= 0.")
     if config.jammer.num_jammers < 1:
         raise ValueError("num_jammers debe ser >= 1.")
     if config.jammer.num_jammers > config.array.num_elements - 1:

@@ -203,61 +203,149 @@ def plot_pattern_elevation(
     plt.close(fig)
 
 
-def plot_heatmap(adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str, adaptive_label: str = "Algoritmo") -> None:
-    """Dibuja un mapa 2D azimut/elevacion de la respuesta normalizada.
+def _select_grid_response_dB(adaptive_grid: dict[str, np.ndarray]) -> tuple[np.ndarray, str, bool]:
+    """Selecciona la respuesta disponible para heatmap/3D.
 
-    Parametros:
-        adaptive_grid: Diccionario devuelto por compute_2d_response_grid.
-        output_path: Ruta PNG donde se guarda la figura.
-        title: Titulo superior de la figura.
-        adaptive_label: Etiqueta del mapa, normalmente el algoritmo usado.
+    Si existe response_power_dB usa potencia sin normalizar. Si no, usa
+    response_dB_normalized, que es la salida original normalizada.
+    """
+    if "response_power_dB" in adaptive_grid:
+        return adaptive_grid["response_power_dB"], "Potencia sin normalizar [dB]", False
+    return adaptive_grid["response_dB_normalized"], "Respuesta normalizada [dB]", True
+
+
+def _nearest_grid_value(
+    az_grid: np.ndarray,
+    el_grid: np.ndarray,
+    response_grid: np.ndarray,
+    az_deg: float,
+    el_deg: float,
+) -> float:
+    """Devuelve la respuesta del punto de malla mas cercano a az/el."""
+    dist = (az_grid - az_deg) ** 2 + (el_grid - el_deg) ** 2
+    row_idx, col_idx = np.unravel_index(np.argmin(dist), dist.shape)
+    return float(response_grid[row_idx, col_idx])
+
+
+def plot_heatmap(
+    adaptive_grid: dict[str, np.ndarray],
+    output_path: Path,
+    title: str,
+    adaptive_label: str = "Algoritmo",
+    jammer_info: list[tuple[str, float, float] | tuple[str, float, float, int]] | None = None,
+) -> None:
+    """Dibuja un mapa 2D azimut/elevacion y marca los nulos de jammers.
+
+    jammer_info acepta tuplas:
+      - (nombre, azimut_deg, elevacion_deg)
+      - (nombre, azimut_deg, elevacion_deg, color_idx)
     """
     fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
+    response_dB, colorbar_label, is_normalized = _select_grid_response_dB(adaptive_grid)
+
+    pcolor_kwargs = dict(
+        shading="auto",
+        cmap="viridis",
+    )
+    if is_normalized:
+        pcolor_kwargs.update(vmin=-60, vmax=0)
+
     pcm = ax.pcolormesh(
         adaptive_grid["azimuth_deg"],
         adaptive_grid["elevation_deg"],
-        adaptive_grid["response_dB_normalized"],
-        shading="auto",
-        cmap="viridis",
-        vmin=-60,
-        vmax=0,
+        response_dB,
+        **pcolor_kwargs,
     )
+
+    jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
+    if jammer_info:
+        for j_idx, item in enumerate(jammer_info):
+            jammer_name, az, el = item[:3]
+            color_idx = item[3] if len(item) > 3 else j_idx
+            color = jammer_colors[color_idx % len(jammer_colors)]
+            z_value = _nearest_grid_value(
+                adaptive_grid["azimuth_deg"],
+                adaptive_grid["elevation_deg"],
+                response_dB,
+                float(az),
+                float(el),
+            )
+            ax.scatter(
+                az,
+                el,
+                s=95,
+                marker="x",
+                color=color,
+                linewidths=2.5,
+                label=f"Nulo {jammer_name} ({z_value:.1f} dB)",
+            )
+        ax.legend(loc="upper right", fontsize=8)
+
     ax.set_xlabel("Azimut [deg]", fontsize=10, fontweight="bold")
     ax.set_ylabel("Elevacion [deg]", fontsize=10, fontweight="bold")
     ax.set_title(adaptive_label, fontsize=12, fontweight="bold")
-    fig.colorbar(pcm, ax=ax, label="Respuesta [dB]")
+    fig.colorbar(pcm, ax=ax, label=colorbar_label)
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_3d(adaptive_grid: dict[str, np.ndarray], output_path: Path, title: str, adaptive_label: str = "Algoritmo") -> None:
-    """Dibuja una superficie 3D del patron normalizado en dB.
-
-    Parametros:
-        adaptive_grid: Diccionario devuelto por compute_2d_response_grid.
-        output_path: Ruta PNG donde se guarda la figura.
-        title: Titulo superior de la figura.
-        adaptive_label: Etiqueta de la superficie, normalmente el algoritmo.
-    """
+def plot_3d(
+    adaptive_grid: dict[str, np.ndarray],
+    output_path: Path,
+    title: str,
+    adaptive_label: str = "Algoritmo",
+    jammer_info: list[tuple[str, float, float] | tuple[str, float, float, int]] | None = None,
+) -> None:
+    """Dibuja una superficie 3D y marca con X los nulos de jammers."""
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(1, 1, 1, projection="3d")
+    response_dB, colorbar_label, is_normalized = _select_grid_response_dB(adaptive_grid)
+
     surf = ax.plot_surface(
         adaptive_grid["azimuth_deg"],
         adaptive_grid["elevation_deg"],
-        adaptive_grid["response_dB_normalized"],
+        response_dB,
         cmap="viridis",
         linewidth=0,
         antialiased=True,
         rcount=100,
         ccount=100,
     )
+
+    jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
+    if jammer_info:
+        for j_idx, item in enumerate(jammer_info):
+            jammer_name, az, el = item[:3]
+            color_idx = item[3] if len(item) > 3 else j_idx
+            color = jammer_colors[color_idx % len(jammer_colors)]
+            z_value = _nearest_grid_value(
+                adaptive_grid["azimuth_deg"],
+                adaptive_grid["elevation_deg"],
+                response_dB,
+                float(az),
+                float(el),
+            )
+            ax.scatter(
+                az,
+                el,
+                z_value,
+                s=95,
+                marker="x",
+                color=color,
+                linewidths=3.0,
+                depthshade=False,
+                label=f"Nulo {jammer_name} ({z_value:.1f} dB)",
+            )
+        ax.legend(loc="upper right", fontsize=8)
+
     ax.set_xlabel("Azimut [deg]", fontsize=9, fontweight="bold")
     ax.set_ylabel("Elevacion [deg]", fontsize=9, fontweight="bold")
-    ax.set_zlabel("Respuesta [dB]", fontsize=9, fontweight="bold")
-    ax.set_zlim(-60, 0)
+    ax.set_zlabel(colorbar_label, fontsize=9, fontweight="bold")
+    if is_normalized:
+        ax.set_zlim(-60, 0)
     ax.set_title(adaptive_label, fontsize=12, fontweight="bold")
-    fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
+    fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1, label=colorbar_label)
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)

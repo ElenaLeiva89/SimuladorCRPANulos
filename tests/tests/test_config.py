@@ -1,5 +1,8 @@
+from dataclasses import replace
+
 import pytest
 from crpa_sim.config import ArrayConfig, BeamformingConfig, GNSS_CARRIER_FREQUENCIES_HZ, JammerConfig, JammerTemplate, NoiseConfig, OutputConfig, ScanConfig, SignalConfig, SimulationConfig, normalize_gnss_band
+from crpa_sim.io_utils import validate_project_config
 
 def test_normalize_gnss_band():
     """Comprueba la normalizacion de bandas GNSS.
@@ -89,3 +92,29 @@ def test_from_dict_missing_required_fields_raise_key_error():
         ArrayConfig.from_dict({"geometry": "hexagonal_7"})
     with pytest.raises(KeyError):
         JammerConfig.from_dict({"num_jammers": 1, "jnr_dB": 30.0})
+
+
+def test_validate_project_config_rejects_physical_invalid_ranges(project_config):
+    """Comprueba rangos fisicos y numericos invalidos de configuracion global.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+    """
+    invalid_configs = [
+        replace(project_config, array=replace(project_config.array, element_spacing_over_lambda=0.0)),
+        replace(project_config, signal=replace(project_config.signal, speed_of_light_m_s=0.0)),
+        replace(project_config, signal=replace(project_config.signal, sample_rate_hz=0.0)),
+        replace(project_config, signal=replace(project_config.signal, num_snapshots=0)),
+        replace(project_config, signal=replace(project_config.signal, fft_size=0)),
+        replace(project_config, simulation=replace(project_config.simulation, num_montecarlo=0)),
+        replace(project_config, beamforming=replace(project_config.beamforming, diagonal_loading_factor=-1e-3)),
+        replace(project_config, scan=replace(project_config.scan, azimuth_scan_step_deg=0.0)),
+        replace(project_config, scan=replace(project_config.scan, elevation_scan_step_deg=0.0)),
+        replace(project_config, scan=replace(project_config.scan, azimuth_scan_min_deg=10.0, azimuth_scan_max_deg=0.0)),
+        replace(project_config, scan=replace(project_config.scan, elevation_scan_min_deg=10.0, elevation_scan_max_deg=0.0)),
+        replace(project_config, noise=replace(project_config.noise, noise_power_linear=-1.0)),
+    ]
+
+    for config in invalid_configs:
+        with pytest.raises(ValueError):
+            validate_project_config(config)

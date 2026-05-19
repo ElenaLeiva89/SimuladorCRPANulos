@@ -44,7 +44,10 @@ def test_patterns(project_config, element_positions_m):
     assert list(compute_elevation_response_cut(project_config, element_positions_m, w, el, 0)["azimuth_deg"]) == [0,0,0]
     grid = compute_2d_response_grid(project_config, element_positions_m, w, az, el)
     assert grid["response_abs"].shape == (3,3)
-    assert grid["response_abs_normalized"].max() == pytest.approx(1.0)
+    assert grid["response_power"].shape == (3,3)
+    assert grid["response_power_dB"].shape == (3,3)
+    assert np.allclose(grid["response_power"], grid["response_abs"] ** 2)
+    assert np.isfinite(grid["response_power_dB"]).all()
     scan_az, scan_el = make_scan_vectors(project_config)
     assert scan_az[0] == project_config.scan.azimuth_scan_min_deg
     assert scan_el[-1] >= project_config.scan.elevation_scan_max_deg

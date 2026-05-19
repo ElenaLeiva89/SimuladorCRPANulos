@@ -20,7 +20,7 @@
     "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "lcmv",
+    "algorithm": "power_inversion",
     "desired_azimuth_deg": 0.0,
     "desired_elevation_deg": 90.0,
     "diagonal_loading_factor": 0.001,
@@ -44,7 +44,7 @@
     "variable_doa_azimuth_range_deg": [-180.0, 180.0],
     "variable_doa_elevation_range_deg": [-90.0, 90.0],
     "base_jammers": [
-      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
+      {"name": "Jammer_1", "azimuth_deg": 179.0,  "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
       {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11, "chirp_frequency":60000000},
       {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00, "chirp_frequency":60000000},
       {"name": "Jammer_4", "azimuth_deg": -90.0, "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.17, "chirp_frequency":60000000},
@@ -53,7 +53,7 @@
     ]
   },
   "output_config": {
-    "output_dir": "results_crpa_nullforming_lcmv_1_jammer",
+    "output_dir": "results_crpa_nullforming_power_power_inversion_test6",
     "save_csv": false,
     "save_npz": false,
     "save_plots": true,

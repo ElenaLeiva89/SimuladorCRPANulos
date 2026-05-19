@@ -216,9 +216,32 @@ def _save_jammer_plots(
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
 
-    radiation_grid = compute_2d_response_grid(config, element_positions_m, selected_weights, azimuth_scan_deg, elevation_scan_deg)
-    plot_3d(radiation_grid, output_dir / f"{tag}_pattern_3d_comparison.png", "Patron 3D CRPA para algoritmo " + config.beamforming.algorithm)
-    plot_heatmap(radiation_grid, output_dir / f"{tag}_array_factor_heatmap.png", f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D")
+    jammer_info_3d = [
+        (jammer.name, jammer.azimuth_deg, jammer.elevation_deg, idx - 1)
+        for idx, jammer in enumerate(jammer_list, start=1)
+    ]
+
+    radiation_grid = compute_2d_response_grid(
+        config,
+        element_positions_m,
+        selected_weights,
+        azimuth_scan_deg,
+        elevation_scan_deg,
+    )
+    plot_3d(
+        radiation_grid,
+        output_dir / "pattern_3d_comparison.png",
+        "Patron 3D CRPA para algoritmo " + config.beamforming.algorithm,
+        adaptive_label=config.beamforming.algorithm,
+        jammer_info=jammer_info_3d,
+    )
+    plot_heatmap(
+        radiation_grid,
+        output_dir / "array_factor_heatmap.png",
+        f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D",
+        adaptive_label=config.beamforming.algorithm,
+        jammer_info=jammer_info_3d,
+    )
 
 
 def run_project(config_path: Path = Path("input_config.json")) -> None:
