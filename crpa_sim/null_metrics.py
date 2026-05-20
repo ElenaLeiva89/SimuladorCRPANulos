@@ -1,5 +1,10 @@
-"""null_metrics.py
-Medida de profundidad y anchura de nulos.
+"""Metricas de profundidad, anchura y area de nulos.
+
+Las funciones de este modulo no calculan pesos: reciben un vector de pesos ya
+estimado y miden como responde el patron en la direccion de cada jammer. Se
+exportan dos niveles de informacion:
+- filas por jammer/umbral/Monte Carlo;
+- resumen medio por jammer y umbral.
 """
 
 from __future__ import annotations
@@ -88,18 +93,15 @@ def compute_null_metrics_for_jammers(
     rows: list[dict] = []
     cuts: dict[str, pd.DataFrame] = {}
 
-    compute_2d_metrics = config.array.steering_model == "ideal"
-    grid_2d = None
-    response_2d_dB = None
-    if compute_2d_metrics:
-        grid_2d = compute_2d_response_grid(
-            config,
-            element_positions_m,
-            weights,
-            azimuth_scan_deg,
-            elevation_scan_deg,
-        )
-        response_2d_dB = grid_2d["response_power_dB"]
+    grid_2d = compute_2d_response_grid(
+        config,
+        element_positions_m,
+        weights,
+        azimuth_scan_deg,
+        elevation_scan_deg,
+    )
+
+    response_2d_dB = grid_2d["response_power_dB"]
 
     for jammer_index, jammer in enumerate(jammer_list, start=1):
         az_cut = compute_azimuth_response_cut(
@@ -123,7 +125,7 @@ def compute_null_metrics_for_jammers(
 
         null_depth = compute_null_depth_dB(config, element_positions_m, weights, jammer, reference_gain_abs=1.0)
         jammer_azimuth_for_width_deg = wrap_angle_180(jammer.azimuth_deg)
-        
+
         for threshold in config.scan.null_thresholds_dB:
             width_az = measure_null_width_1d(
                 az_cut["azimuth_deg"].to_numpy(),
@@ -137,28 +139,26 @@ def compute_null_metrics_for_jammers(
                 jammer.elevation_deg,
                 threshold,
             )
-            if compute_2d_metrics:
-                region_2d = measure_null_region_2d(
-                    grid_2d["azimuth_deg"],
-                    grid_2d["elevation_deg"],
-                    response_2d_dB,
-                    jammer.azimuth_deg,
-                    jammer.elevation_deg,
-                    threshold,
-                )
-            else:
-                region_2d = {
-                    "null_area_cells_2d": None,
-                    "null_area_deg2_2d": None,
-                    "null_width_azimuth_2d_deg": None,
-                    "null_width_elevation_2d_deg": None,
-                }
+            region_2d = measure_null_region_2d(
+                grid_2d["azimuth_deg"],
+                grid_2d["elevation_deg"],
+                response_2d_dB,
+                jammer.azimuth_deg,
+                jammer.elevation_deg,
+                threshold,
+            )
             rows.append(
                 {
+                    "montecarlo_index": montecarlo_index,
+                    "algorithm": config.beamforming.algorithm,
+                    "doa_mode": config.simulation.doa_mode,
+                    "num_jammers": len(jammer_list),
+                    "jammer_index": jammer_index,
                     "jammer_name": jammer.name,
                     "jammer_azimuth_deg": jammer.azimuth_deg,
                     "jammer_elevation_deg": jammer.elevation_deg,
                     "jammer_jnr_dB": jammer.jnr_dB,
+                    "jammer_signal_type": jammer.signal_type,
                     "null_depth_dB": null_depth,
                     "attenuation_threshold_dB": threshold,
                     "null_width_azimuth_deg": width_az,
@@ -186,6 +186,7 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     ]
 
     numeric_cols = [
+        "null_depth_dB",
         "null_width_azimuth_deg",
         "null_width_elevation_deg",
         "null_area_cells_2d",
@@ -194,14 +195,31 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
         "null_width_elevation_2d_deg",
     ]
 
-    return metrics.groupby(group_cols, dropna=False)[numeric_cols].mean().reset_index()
+    metrics = metrics.copy()
+
+    for col in numeric_cols:
+        metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
+
+    summary = (
+        metrics
+        .groupby(group_cols, dropna=False)[numeric_cols]
+        .mean()
+        .reset_index()
+    )
+
+    return summary.round(2)
 
 def wrap_angle_180(angle_deg: float) -> float:
     """Normaliza un azimut al rango [-180, 180)."""
     return ((angle_deg + 180.0) % 360.0) - 180.0
 
 def circular_azimuth_width_deg(angles_deg: np.ndarray) -> float:
-    """Calcula anchura angular mínima teniendo en cuenta wrap-around."""
+    """Calcula la anchura angular minima teniendo en cuenta wrap-around.
+
+    Parametros:
+        angles_deg: Azimuts de las celdas que pertenecen a una misma region
+            de nulo, en grados.
+    """
 
     angles = np.mod(angles_deg, 360.0)
     angles = np.sort(angles)
@@ -223,7 +241,16 @@ def measure_null_region_2d(
     jammer_elevation_deg: float,
     threshold_dB: float,
 ) -> dict:
-    """Mide la region 2D del nulo alrededor del jammer en la malla az/el."""
+    """Mide la region 2D del nulo alrededor del jammer en la malla az/el.
+
+    Parametros:
+        az_grid_deg: Malla 2D de azimuts en grados.
+        el_grid_deg: Malla 2D de elevaciones en grados.
+        response_dB: Respuesta en dB en cada celda de la malla.
+        jammer_azimuth_deg: Azimut del jammer que define el centro buscado.
+        jammer_elevation_deg: Elevacion del jammer que define el centro.
+        threshold_dB: Umbral maximo para considerar una celda parte del nulo.
+    """
 
     jammer_azimuth_deg = wrap_angle_180(jammer_azimuth_deg)
 

@@ -1,5 +1,8 @@
-"""io_utils.py
-Carga de configuracion, guardado de tablas, matrices y logs.
+"""Entrada/salida del simulador.
+
+Centraliza la carga de configuracion, las validaciones que dependen de varios
+bloques del JSON y la escritura de artefactos reproducibles: configuracion
+usada, CSV, matrices NPZ y log textual.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from .config import (
     ScanConfig,
     SignalConfig,
     SimulationConfig,
+    VALID_JAMMER_SIGNAL_TYPES,
 )
 
 
@@ -99,6 +103,20 @@ def validate_project_config(config: ProjectConfig) -> None:
         raise ValueError("num_jammers supera el numero de base_jammers definidos.")
     if abs(config.array.array_boresight_elevation_deg - 90.0) > 1e-9:
         raise ValueError("Para este ejercicio la CRPA ideal debe apuntar al cenit: array_boresight_elevation_deg=90.")
+    if len(config.jammer.variable_doa_azimuth_range_deg) != 2:
+        raise ValueError("variable_doa_azimuth_range_deg debe tener dos valores.")
+    if len(config.jammer.variable_doa_elevation_range_deg) != 2:
+        raise ValueError("variable_doa_elevation_range_deg debe tener dos valores.")
+    if config.jammer.variable_doa_azimuth_range_deg[0] > config.jammer.variable_doa_azimuth_range_deg[1]:
+        raise ValueError("variable_doa_azimuth_range_deg debe estar ordenado como [min, max].")
+    if config.jammer.variable_doa_elevation_range_deg[0] > config.jammer.variable_doa_elevation_range_deg[1]:
+        raise ValueError("variable_doa_elevation_range_deg debe estar ordenado como [min, max].")
+
+    for template in config.jammer.base_jammers:
+        if template.signal_type not in VALID_JAMMER_SIGNAL_TYPES:
+            raise ValueError(f"signal_type no soportado para {template.name}: {template.signal_type}")
+        if template.signal_type == "chirp" and template.chirp_frequency is None:
+            raise ValueError(f"El jammer chirp {template.name} requiere chirp_frequency normalizada.")
 
 
 def save_config_used(config: ProjectConfig, output_dir: Path) -> None:
@@ -121,7 +139,7 @@ def save_dataframe(df: pd.DataFrame, path: Path, sep: str = ";", decimal: str = 
         sep: Separador de columnas.
         decimal: Caracter decimal para valores numericos.
     """
-    df.to_csv(path, index=False, sep=sep, decimal=decimal)
+    df.to_csv(path, index=False, sep=sep, decimal=decimal, float_format="%.2f",)
 
 
 def save_complex_npz(path: Path, **arrays: np.ndarray) -> None:
