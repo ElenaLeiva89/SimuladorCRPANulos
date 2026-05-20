@@ -36,6 +36,7 @@ class ArrayConfig:
     element_spacing_over_lambda: float
     array_boresight_elevation_deg: float
     steering_model: str = "ideal"
+    measured_steering_file: str | None = None
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "ArrayConfig":
@@ -49,6 +50,8 @@ class ArrayConfig:
         values["geometry"] = str(values["geometry"]).lower()
         values["element_type"] = str(values["element_type"]).lower()
         values["steering_model"] = str(values.get("steering_model", "ideal")).lower()
+        if values.get("measured_steering_file") in ("", None):
+            values["measured_steering_file"] = None
         return cls(**values)
 
 

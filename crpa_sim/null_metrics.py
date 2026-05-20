@@ -88,15 +88,18 @@ def compute_null_metrics_for_jammers(
     rows: list[dict] = []
     cuts: dict[str, pd.DataFrame] = {}
 
-    grid_2d = compute_2d_response_grid(
-        config,
-        element_positions_m,
-        weights,
-        azimuth_scan_deg,
-        elevation_scan_deg,
-    )
-
-    response_2d_dB = grid_2d["response_power_dB"]
+    compute_2d_metrics = config.array.steering_model == "ideal"
+    grid_2d = None
+    response_2d_dB = None
+    if compute_2d_metrics:
+        grid_2d = compute_2d_response_grid(
+            config,
+            element_positions_m,
+            weights,
+            azimuth_scan_deg,
+            elevation_scan_deg,
+        )
+        response_2d_dB = grid_2d["response_power_dB"]
 
     for jammer_index, jammer in enumerate(jammer_list, start=1):
         az_cut = compute_azimuth_response_cut(
@@ -134,14 +137,22 @@ def compute_null_metrics_for_jammers(
                 jammer.elevation_deg,
                 threshold,
             )
-            region_2d = measure_null_region_2d(
-                grid_2d["azimuth_deg"],
-                grid_2d["elevation_deg"],
-                response_2d_dB,
-                jammer.azimuth_deg,
-                jammer.elevation_deg,
-                threshold,
-            )
+            if compute_2d_metrics:
+                region_2d = measure_null_region_2d(
+                    grid_2d["azimuth_deg"],
+                    grid_2d["elevation_deg"],
+                    response_2d_dB,
+                    jammer.azimuth_deg,
+                    jammer.elevation_deg,
+                    threshold,
+                )
+            else:
+                region_2d = {
+                    "null_area_cells_2d": None,
+                    "null_area_deg2_2d": None,
+                    "null_width_azimuth_2d_deg": None,
+                    "null_width_elevation_2d_deg": None,
+                }
             rows.append(
                 {
                     "jammer_name": jammer.name,
