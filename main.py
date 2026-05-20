@@ -1,12 +1,14 @@
-"""main.py
-Simulador CRPA ideal orientada al cenit para evaluacion de nulos.
+"""Punto de entrada del simulador CRPA.
 
-Version limpia:
-- un unico doa_mode por ejecucion: fixed o variable;
-- un unico algoritmo por ejecucion: power_inversion o lcmv;
-- logs y ficheros similares a la version modular inicial;
-- plots globales y plots por jammer;
-- CSV final de profundidad y anchos de nulo por jammer y umbral.
+El flujo de una ejecucion es:
+1. leer y validar `input_config.json`;
+2. construir la geometria hexagonal ideal de 7 elementos;
+3. generar jammers, ruido y snapshots para cada Monte Carlo;
+4. estimar la covarianza espacial y los pesos adaptativos;
+5. medir profundidad/anchura de nulos y guardar salidas.
+
+La configuracion activa un unico modo DoA (`fixed` o `variable`) y un unico
+algoritmo (`power_inversion` o `lcmv`) por ejecucion.
 """
 
 from __future__ import annotations
@@ -68,7 +70,6 @@ def _save_global_outputs(
     covariance_matrix: np.ndarray,
     selected_weights: np.ndarray,
     conventional_w: np.ndarray,
-    jammer_list: list[JammerInstance],
     jammer_table: pd.DataFrame,
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
@@ -83,7 +84,6 @@ def _save_global_outputs(
         covariance_matrix: Covarianza espacial estimada desde X.
         selected_weights: Pesos del algoritmo seleccionado.
         conventional_w: Pesos convencionales de referencia.
-        jammer_list: Lista de jammers del caso actual.
         jammer_table: Tabla descriptiva de los jammers generados.
         azimuth_scan_deg: Vector de azimuts para cortes.
         elevation_scan_deg: Vector de elevaciones para cortes.
@@ -165,7 +165,6 @@ def _save_jammer_plots(
     output_dir: Path,
     element_positions_m: np.ndarray,
     selected_weights: np.ndarray,
-    conventional_w: np.ndarray,
     jammer_list: list[JammerInstance],
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
@@ -178,7 +177,6 @@ def _save_jammer_plots(
         output_dir: Directorio raiz de salida.
         element_positions_m: Matriz (N, 3) con posiciones del array.
         selected_weights: Pesos del algoritmo seleccionado.
-        conventional_w: Pesos convencionales disponibles como referencia.
         jammer_list: Lista de jammers del caso actual.
         azimuth_scan_deg: Vector de azimuts para cortes.
         elevation_scan_deg: Vector de elevaciones para cortes.
@@ -251,7 +249,12 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
         config_path: Ruta del fichero de configuracion de entrada.
     """
     config = load_project_config(config_path)
-    output_dir = ensure_output_dir(config.output.output_dir)
+    resolved_output_dir = config.output.output_dir.format(
+        algorithm=config.beamforming.algorithm,
+        doa_mode=config.simulation.doa_mode,
+        steering_model=config.array.steering_model,
+    )
+    output_dir = ensure_output_dir(resolved_output_dir)
     save_config_used(config, output_dir)
 
     print("/////////////////////// INICIANDO SIMULACION CRPA ///////////////////////")
@@ -294,7 +297,6 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                 covariance_matrix,
                 selected_weights,
                 conventional_w,
-                jammer_list,
                 jammer_table,
                 azimuth_scan_deg,
                 elevation_scan_deg,
@@ -304,7 +306,6 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                 output_dir,
                 element_positions_m,
                 selected_weights,
-                conventional_w,
                 jammer_list,
                 azimuth_scan_deg,
                 elevation_scan_deg,
@@ -317,19 +318,21 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                 for name, table in jammer_cut_tables.items():
                     save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)
 
-            summary_rows.append(
-                {
-                    "montecarlo_index": mc,
-                    "num_metrics_rows": len(metrics_table),
-                    "num_jammers": len(jammer_list),
-                    "doa_mode": config.simulation.doa_mode,
-                    "algorithm": config.beamforming.algorithm,
-                }
-            )
+        summary_rows.append(
+            {
+                "montecarlo_index": mc,
+                "num_metrics_rows": len(metrics_table),
+                "num_jammers": len(jammer_list),
+                "doa_mode": config.simulation.doa_mode,
+                "algorithm": config.beamforming.algorithm,
+            }
+        )
 
     metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
     metrics_summary = summarize_null_metrics(metrics_full) if not metrics_full.empty else pd.DataFrame()
 
+    if config.output.save_csv and not metrics_full.empty:
+        save_dataframe(metrics_full, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
     save_dataframe(metrics_summary, output_dir / "null_metrics_summary.csv", config.output.csv_separator, config.output.csv_decimal)
 
     save_run_log(config, output_dir, summary_rows)

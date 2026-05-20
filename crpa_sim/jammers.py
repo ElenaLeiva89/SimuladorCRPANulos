@@ -1,5 +1,8 @@
-"""jammers.py
-Generacion de ruido, senales jammer y matriz de snapshots X.
+"""Generacion de ruido, jammers y matriz de snapshots.
+
+Cada jammer se genera como una senal baseband temporal y se proyecta sobre
+los elementos mediante su steering vector. La matriz recibida resultante es
+X = ruido + suma_j a_j s_j, con forma (num_elements, num_snapshots).
 """
 
 from __future__ import annotations
@@ -55,6 +58,8 @@ def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, 
         amplitude = np.sqrt(jammer_power_linear)
         return amplitude * np.exp(1j * (2.0 * np.pi * jammer.normalized_frequency * n + phase0))
     if jammer.signal_type == "chirp":
+        if jammer.chirp_frequency is None:
+            raise ValueError("Los jammers de tipo chirp requieren chirp_frequency normalizada.")
         n = np.arange(num_snapshots)
         phase0 = rng.uniform(0.0, 2.0 * np.pi)
         amplitude = np.sqrt(jammer_power_linear)

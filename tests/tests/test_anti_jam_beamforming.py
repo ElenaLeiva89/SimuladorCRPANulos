@@ -90,6 +90,9 @@ def test_null_metrics_table_has_one_row_per_jammer_and_threshold(fast_config, rn
 
     assert len(metrics) == len(jammers) * len(cfg.scan.null_thresholds_dB)
     assert set(metrics["attenuation_threshold_dB"]) == set(cfg.scan.null_thresholds_dB)
+    assert set(metrics["montecarlo_index"]) == {1}
+    assert set(metrics["algorithm"]) == {"lcmv"}
+    assert set(metrics["jammer_index"]) == set(range(1, len(jammers) + 1))
     assert all(name.endswith(("azimuth_cut", "elevation_cut")) for name in cuts)
     assert metrics["null_depth_dB"].max() < -60.0
 

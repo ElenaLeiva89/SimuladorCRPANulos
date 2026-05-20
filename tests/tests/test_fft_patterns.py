@@ -23,6 +23,10 @@ def test_fft_size_and_tone_detection(rng):
     assert len(default_df) == X.shape[1]
     with pytest.raises(ValueError):
         temporal_fft_snapshot_matrix(X, 1024.0, 0)
+    with pytest.raises(ValueError):
+        temporal_fft_snapshot_matrix(X[0], 1024.0)
+    with pytest.raises(ValueError):
+        temporal_fft_snapshot_matrix(X, 0.0)
 
 def test_patterns(project_config, element_positions_m):
     """Comprueba cortes, malla 2D y vectores de barrido de patrones.

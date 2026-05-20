@@ -18,7 +18,7 @@
   "simulation_config": {
     "num_montecarlo": 10,
     "random_seed": 12345,
-    "doa_mode": "fixed"
+    "doa_mode": "variable"
   },
   "beamforming_config": {
     "algorithm": "power_inversion",

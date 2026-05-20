@@ -1,5 +1,8 @@
-"""config.py
-Configuracion tipada del simulador CRPA.
+"""Configuracion tipada del simulador CRPA.
+
+Las dataclasses de este modulo separan el JSON externo del resto del codigo:
+normalizan textos, convierten tipos basicos y dejan las restricciones
+globales a `io_utils.validate_project_config`.
 
 La version limpia usa un unico modo DoA y un unico algoritmo por ejecucion:
 - simulation_config.doa_mode: "fixed" o "variable"
@@ -15,6 +18,7 @@ GNSS_CARRIER_FREQUENCIES_HZ = {"E5": 1.19179e9, "E6": 1.27875e9, "E1": 1.57542e9
 GNSS_BAND_LABELS = {1: "E5", 2: "E6", 3: "E1"}
 VALID_DOA_MODES = {"fixed", "variable"}
 VALID_ALGORITHMS = {"power_inversion", "lcmv"}
+VALID_JAMMER_SIGNAL_TYPES = {"tone", "complex_gaussian", "chirp"}
 
 
 def normalize_gnss_band(value: int | str) -> str:

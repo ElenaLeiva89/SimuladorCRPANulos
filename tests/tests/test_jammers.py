@@ -51,6 +51,40 @@ def test_build_jammer_case_fixed_variable_and_matrix(project_config, variable_pr
     assert len(table) == len(fixed)
     assert "jammer_power_linear" in table.columns
 
+
+def test_variable_doa_is_reproducible_per_montecarlo_seed(project_config):
+    """Comprueba que DoA variable depende de la semilla Monte Carlo.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+    """
+    from main import _case_rng
+
+    cfg = replace(
+        project_config,
+        simulation=replace(project_config.simulation, doa_mode="variable", random_seed=9876),
+        jammer=replace(
+            project_config.jammer,
+            num_jammers=2,
+            variable_doa_azimuth_range_deg=(-40.0, 40.0),
+            variable_doa_elevation_range_deg=(10.0, 80.0),
+        ),
+    )
+
+    first = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 1))
+    first_repeat = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 1))
+    second = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 2))
+
+    first_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in first])
+    repeat_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in first_repeat])
+    second_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in second])
+
+    np.testing.assert_allclose(first_coords, repeat_coords)
+    assert not np.allclose(first_coords, second_coords)
+    assert np.all((-40.0 <= first_coords[:, 0]) & (first_coords[:, 0] <= 40.0))
+    assert np.all((10.0 <= first_coords[:, 1]) & (first_coords[:, 1] <= 80.0))
+
+
 def test_build_jammer_case_preserves_chirp_frequency(project_config, rng):
     """Comprueba que la frecuencia de chirp se conserva desde la plantilla.
 
@@ -103,12 +137,12 @@ def test_generate_received_snapshot_matrix_empty_jammers(project_config, element
     assert table.empty
 
 
-def test_chirp_without_frequency_raises_type_error(rng):
-    """Documenta el fallo esperado si un chirp no tiene frecuencia central.
+def test_chirp_without_frequency_raises_value_error(rng):
+    """Documenta el error esperado si un chirp no tiene frecuencia central.
 
     Parametros:
         rng: Generador aleatorio determinista.
     """
     chirp = JammerInstance("C", 0, 0, 30, "chirp", chirp_frequency=None)
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError, match="chirp_frequency"):
         generate_jammer_baseband_signal(chirp, 16, 1.0, rng)
