@@ -97,13 +97,23 @@ def test_main_run_project_light(config_json_path):
     out = Path(cfg.output.output_dir)
     assert (out / "config_used.json").exists()
     assert (out / "run_log.txt").exists()
-    assert not (out / "null_metrics_by_jammer.csv").exists()
+    metrics_path = out / "null_metrics_by_jammer.csv"
+    assert metrics_path.exists()
+    metrics = pd.read_csv(metrics_path, sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
+    assert {
+        "montecarlo_index",
+        "algorithm",
+        "doa_mode",
+        "jammer_index",
+        "jammer_signal_type",
+    }.issubset(metrics.columns)
     summary_path = out / "null_metrics_summary.csv"
     assert summary_path.exists()
     summary = pd.read_csv(summary_path, sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
     assert list(summary.columns) == [
         "jammer_name",
         "attenuation_threshold_dB",
+        "null_depth_dB",
         "null_width_azimuth_deg",
         "null_width_elevation_deg",
         "null_area_cells_2d",
@@ -142,7 +152,7 @@ def test_global_outputs_save_npz_without_csv(project_config, element_positions_m
     w = conventional_weights(cfg, element_positions_m)
     az, el = make_scan_vectors(cfg)
 
-    _save_global_outputs(cfg, out, element_positions_m, X, compute_sample_covariance(X), w, w, jammers, jammer_table, az, el)
+    _save_global_outputs(cfg, out, element_positions_m, X, compute_sample_covariance(X), w, w, jammer_table, az, el)
 
     assert (out / "output_data" / "matrices_complex.npz").exists()
     assert not (out / "output_data" / "jammer_table.csv").exists()
@@ -172,6 +182,6 @@ def test_global_outputs_no_data_dir_when_all_outputs_disabled(project_config, el
     w = conventional_weights(cfg, element_positions_m)
     az, el = make_scan_vectors(cfg)
 
-    _save_global_outputs(cfg, out, element_positions_m, X, compute_sample_covariance(X), w, w, jammers, jammer_table, az, el)
+    _save_global_outputs(cfg, out, element_positions_m, X, compute_sample_covariance(X), w, w, jammer_table, az, el)
 
     assert not (out / "output_data").exists()

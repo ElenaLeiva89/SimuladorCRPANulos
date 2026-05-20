@@ -1,5 +1,8 @@
-"""beamformers.py
-Algoritmos Power Inversion, LCMV y seleccion de pesos.
+"""Calculo de pesos adaptativos para el array CRPA.
+
+Este modulo contiene solo los algoritmos seleccionables desde la
+configuracion validada: Power Inversion y LCMV. Los pesos convencionales se
+mantienen en `patterns.py` como referencia para comparativas y plots.
 """
 
 from __future__ import annotations
@@ -11,7 +14,6 @@ import numpy as np
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
 from .covariance import compute_sample_covariance, invert_covariance
-from .patterns import conventional_weights
 
 
 def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
@@ -89,7 +91,8 @@ def compute_weights(
 
     Parametros:
         config: Configuracion completa del proyecto; se lee
-            config.beamforming.algorithm.
+            config.beamforming.algorithm, que debe ser "power_inversion" o
+            "lcmv" tras la validacion de entrada.
         snapshot_matrix: Matriz X de snapshots recibidos.
         element_positions_m: Matriz (N, 3) con posiciones del array.
         jammer_list: Lista de jammers del caso actual, necesaria para LCMV.
@@ -99,6 +102,4 @@ def compute_weights(
         return compute_power_inversion_weights(config, snapshot_matrix)
     if algorithm == "lcmv":
         return compute_lcmv_weights(config, snapshot_matrix, element_positions_m, jammer_list)
-    if algorithm == "conventional":
-        return conventional_weights(config, element_positions_m)
     raise ValueError(f"Algoritmo no soportado: {algorithm}")

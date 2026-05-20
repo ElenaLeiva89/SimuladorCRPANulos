@@ -46,10 +46,6 @@ def test_compute_weights_selector(project_config, power_inversion_config, elemen
         jammers = build_jammer_case(cfg, rng)
         X, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
         assert compute_weights(cfg, X, element_positions_m, jammers).shape == (7,)
-    conventional = replace(project_config, beamforming=replace(project_config.beamforming, algorithm="conventional"))
-    jammers = build_jammer_case(conventional, rng)
-    X, _ = generate_received_snapshot_matrix(conventional, element_positions_m, jammers, rng)
-    assert compute_weights(conventional, X, element_positions_m, jammers).shape == (7,)
     bad = replace(project_config, beamforming=replace(project_config.beamforming, algorithm="bad"))
     jammers = build_jammer_case(project_config, rng)
     X, _ = generate_received_snapshot_matrix(project_config, element_positions_m, jammers, rng)
@@ -76,6 +72,12 @@ def test_null_metrics(project_config, element_positions_m, rng):
     assert len(metrics) == len(jammers) * len(project_config.scan.null_thresholds_dB)
     assert len(cuts) == len(jammers) * 2
     assert {
+        "montecarlo_index",
+        "algorithm",
+        "doa_mode",
+        "num_jammers",
+        "jammer_index",
+        "jammer_signal_type",
         "null_area_cells_2d",
         "null_area_deg2_2d",
         "null_width_azimuth_2d_deg",
@@ -171,6 +173,7 @@ def test_null_metrics_empty_inputs():
         columns=[
             "jammer_name",
             "attenuation_threshold_dB",
+            "null_depth_dB",
             "null_width_azimuth_deg",
             "null_width_elevation_deg",
             "null_area_cells_2d",
@@ -182,3 +185,50 @@ def test_null_metrics_empty_inputs():
     summary = summarize_null_metrics(metrics)
     assert list(summary.columns) == list(metrics.columns)
     assert summary.empty
+
+
+def test_null_metrics_summary_rounds_configured_decimal_columns():
+    """Comprueba que el resumen expone metricas con dos decimales.
+
+    Parametros:
+        No recibe parametros.
+    """
+    metrics = pd.DataFrame(
+        [
+            {
+                "jammer_name": "J1",
+                "attenuation_threshold_dB": -20.0,
+                "null_depth_dB": -33.333,
+                "null_width_azimuth_deg": 1.111,
+                "null_width_elevation_deg": 2.222,
+                "null_area_cells_2d": 3,
+                "null_area_deg2_2d": 4.444,
+                "null_width_azimuth_2d_deg": 5.555,
+                "null_width_elevation_2d_deg": 6.666,
+            },
+            {
+                "jammer_name": "J1",
+                "attenuation_threshold_dB": -20.0,
+                "null_depth_dB": -33.336,
+                "null_width_azimuth_deg": 1.116,
+                "null_width_elevation_deg": 2.226,
+                "null_area_cells_2d": 5,
+                "null_area_deg2_2d": 4.446,
+                "null_width_azimuth_2d_deg": 5.556,
+                "null_width_elevation_2d_deg": 6.667,
+            },
+        ]
+    )
+
+    summary = summarize_null_metrics(metrics)
+
+    rounded_columns = [
+        "null_depth_dB",
+        "null_width_azimuth_deg",
+        "null_width_elevation_deg",
+        "null_area_deg2_2d",
+        "null_width_azimuth_2d_deg",
+        "null_width_elevation_2d_deg",
+    ]
+    for column in rounded_columns:
+        assert summary.loc[0, column] == pytest.approx(round(summary.loc[0, column], 2))

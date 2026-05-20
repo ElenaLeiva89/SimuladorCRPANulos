@@ -118,3 +118,68 @@ def test_validate_project_config_rejects_physical_invalid_ranges(project_config)
     for config in invalid_configs:
         with pytest.raises(ValueError):
             validate_project_config(config)
+
+
+def test_validate_project_config_rejects_invalid_jammer_templates(project_config):
+    """Cubre validacion semantica de tipos de jammer definidos en el JSON.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+    """
+    bad_signal_type = replace(
+        project_config,
+        jammer=replace(
+            project_config.jammer,
+            num_jammers=1,
+            base_jammers=[replace(project_config.jammer.base_jammers[0], signal_type="bad")],
+        ),
+    )
+    with pytest.raises(ValueError, match="signal_type"):
+        validate_project_config(bad_signal_type)
+
+    chirp_without_frequency = replace(
+        project_config,
+        jammer=replace(
+            project_config.jammer,
+            num_jammers=1,
+            base_jammers=[
+                replace(
+                    project_config.jammer.base_jammers[0],
+                    signal_type="chirp",
+                    chirp_frequency=None,
+                )
+            ],
+        ),
+    )
+    with pytest.raises(ValueError, match="chirp_frequency"):
+        validate_project_config(chirp_without_frequency)
+
+
+def test_validate_project_config_rejects_invalid_variable_doa_ranges(project_config):
+    """Comprueba rangos DoA variables incompletos o desordenados.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+    """
+    invalid_configs = [
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_azimuth_range_deg=(0.0,)),
+        ),
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_elevation_range_deg=(0.0,)),
+        ),
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_azimuth_range_deg=(20.0, -20.0)),
+        ),
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_elevation_range_deg=(80.0, 10.0)),
+        ),
+    ]
+
+    for config in invalid_configs:
+        with pytest.raises(ValueError, match="variable_doa"):
+            validate_project_config(config)
