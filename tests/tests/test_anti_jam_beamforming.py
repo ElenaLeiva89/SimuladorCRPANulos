@@ -20,9 +20,14 @@ def _make_case(config, rng):
     return positions, jammers, X, table
 
 
+def _ideal_config(config):
+    """Devuelve una configuracion ideal para tests con aserciones ideales."""
+    return replace(config, array=replace(config.array, steering_model="ideal", measured_steering_file=None))
+
+
 def test_lcmv_enforces_unit_desired_gain_and_deep_jammer_nulls(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="lcmv"),
         jammer=replace(fast_config.jammer, num_jammers=2, jnr_dB=30.0),
     )
@@ -38,7 +43,7 @@ def test_lcmv_enforces_unit_desired_gain_and_deep_jammer_nulls(fast_config, rng)
 
 def test_power_inversion_places_a_null_for_strong_single_tone_jammer(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="power_inversion", power_inversion_reference_element=1),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=45.0),
     )
@@ -52,7 +57,7 @@ def test_power_inversion_places_a_null_for_strong_single_tone_jammer(fast_config
 
 def test_adaptive_weights_improve_attenuation_over_conventional_for_jammer(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="power_inversion", power_inversion_reference_element=1),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=40.0),
     )
@@ -78,7 +83,7 @@ def test_lcmv_rejects_too_many_jammer_constraints(fast_config, rng):
 
 def test_null_metrics_table_has_one_row_per_jammer_and_threshold(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="lcmv"),
         jammer=replace(fast_config.jammer, num_jammers=2, jnr_dB=30.0),
     )
@@ -99,7 +104,7 @@ def test_null_metrics_table_has_one_row_per_jammer_and_threshold(fast_config, rn
 
 def test_lcmv_null_is_sensitive_to_doa_estimation_error(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="lcmv"),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=35.0),
     )
@@ -117,7 +122,7 @@ def test_lcmv_null_is_sensitive_to_doa_estimation_error(fast_config, rng):
 
 def test_calibration_errors_degrade_ideal_lcmv_null(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="lcmv"),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=35.0),
     )
@@ -138,7 +143,7 @@ def test_calibration_errors_degrade_ideal_lcmv_null(fast_config, rng):
 
 def test_mutual_coupling_degrades_ideal_lcmv_null(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         beamforming=replace(fast_config.beamforming, algorithm="lcmv"),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=35.0),
     )
@@ -161,7 +166,7 @@ def test_mutual_coupling_degrades_ideal_lcmv_null(fast_config, rng):
 
 def test_adaptive_weights_remain_finite_with_very_few_snapshots(fast_config, rng):
     cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         signal=replace(fast_config.signal, num_snapshots=1, fft_size=8),
         beamforming=replace(fast_config.beamforming, diagonal_loading_factor=1e-3),
         jammer=replace(fast_config.jammer, num_jammers=1, jnr_dB=35.0),
@@ -184,7 +189,7 @@ def test_adaptive_weights_remain_finite_with_very_few_snapshots(fast_config, rng
 
 def test_power_inversion_is_sensitive_to_diagonal_loading(fast_config, rng):
     data_cfg = replace(
-        fast_config,
+        _ideal_config(fast_config),
         signal=replace(fast_config.signal, num_snapshots=2, fft_size=8),
         beamforming=replace(
             fast_config.beamforming,

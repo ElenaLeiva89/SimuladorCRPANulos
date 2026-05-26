@@ -27,9 +27,13 @@ def test_direction_unit_vector_is_unit_norm_and_zenith_points_z():
 
 
 def test_zenith_steering_vector_is_all_ones_for_planar_array(base_config):
-    positions = create_crpa_geometry(base_config.array, base_config.element_spacing_m)
-    a = steering_vector(base_config, positions, azimuth_deg=0.0, elevation_deg=90.0)
-    np.testing.assert_allclose(a, np.ones(base_config.array.num_elements, dtype=complex), atol=1e-12)
+    ideal_config = replace(
+        base_config,
+        array=replace(base_config.array, steering_model="ideal", measured_steering_file=None),
+    )
+    positions = create_crpa_geometry(ideal_config.array, ideal_config.element_spacing_m)
+    a = steering_vector(ideal_config, positions, azimuth_deg=0.0, elevation_deg=90.0)
+    np.testing.assert_allclose(a, np.ones(ideal_config.array.num_elements, dtype=complex), atol=1e-12)
 
 
 def test_invalid_doa_mode_is_rejected():

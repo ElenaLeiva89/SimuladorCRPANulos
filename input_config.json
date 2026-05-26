@@ -16,12 +16,12 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 10,
+    "num_montecarlo": 1,
     "random_seed": 12345,
-    "doa_mode": "variable"
+    "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "power_inversion",
+    "algorithm": "lcmv",
     "desired_azimuth_deg": 0.0,
     "desired_elevation_deg": 90.0,
     "diagonal_loading_factor": 0.001,

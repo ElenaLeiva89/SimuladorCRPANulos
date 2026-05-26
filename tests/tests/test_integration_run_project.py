@@ -10,6 +10,21 @@ from main import run_project
 from conftest import write_config_json
 
 
+MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
+
+
+def _with_steering_model(config, steering_model):
+    measured_file = MEASURED_STEERING_FILE if steering_model == "measured" else None
+    return replace(
+        config,
+        array=replace(
+            config.array,
+            steering_model=steering_model,
+            measured_steering_file=measured_file,
+        ),
+    )
+
+
 def test_run_project_creates_core_artifacts_without_plots(fast_config, tmp_path):
     config_path = write_config_json(fast_config, tmp_path / "input_config_test.json")
 
@@ -51,10 +66,74 @@ def test_run_project_resolves_output_dir_template(fast_config, tmp_path):
 
     run_project(config_path)
 
-    out = tmp_path / "results_lcmv_fixed_ideal"
+    out = tmp_path / f"results_lcmv_fixed_{cfg.array.steering_model}"
     assert out.exists()
     assert (out / "config_used.json").exists()
     assert (out / "null_metrics_summary.csv").exists()
+
+
+@pytest.mark.parametrize("steering_model", ["ideal", "measured"])
+@pytest.mark.parametrize("doa_mode", ["fixed", "variable"])
+@pytest.mark.parametrize("algorithm", ["lcmv", "power_inversion"])
+def test_run_project_supports_steering_doa_algorithm_combinations(
+    steering_model,
+    doa_mode,
+    algorithm,
+    fast_config,
+    tmp_path,
+):
+    """Ejecuta todas las combinaciones soportadas de steering, DoA y algoritmo.
+
+    Parametros:
+        steering_model: Modelo de steering bajo prueba.
+        doa_mode: Modo de DoA bajo prueba.
+        algorithm: Algoritmo de beamforming bajo prueba.
+        fast_config: Configuracion ligera de simulacion.
+        tmp_path: Directorio temporal de pytest.
+    """
+    base = _with_steering_model(fast_config, steering_model)
+    cfg = replace(
+        base,
+        signal=replace(base.signal, num_snapshots=64, fft_size=64),
+        simulation=replace(base.simulation, doa_mode=doa_mode, num_montecarlo=1, random_seed=2718),
+        beamforming=replace(base.beamforming, algorithm=algorithm, power_inversion_reference_element=0),
+        scan=replace(
+            base.scan,
+            azimuth_scan_min_deg=-20.0,
+            azimuth_scan_max_deg=20.0,
+            azimuth_scan_step_deg=20.0,
+            elevation_scan_min_deg=0.0,
+            elevation_scan_max_deg=90.0,
+            elevation_scan_step_deg=45.0,
+            null_thresholds_dB=[-10.0],
+        ),
+        jammer=replace(
+            base.jammer,
+            num_jammers=1,
+            variable_doa_azimuth_range_deg=(-20.0, 20.0),
+            variable_doa_elevation_range_deg=(10.0, 80.0),
+        ),
+        output=replace(
+            base.output,
+            output_dir=str(tmp_path / "results_{algorithm}_{doa_mode}_{steering_model}"),
+            save_csv=True,
+            save_npz=True,
+            save_plots=False,
+        ),
+    )
+    config_path = write_config_json(cfg, tmp_path / f"input_{steering_model}_{doa_mode}_{algorithm}.json")
+
+    run_project(config_path)
+
+    out = tmp_path / f"results_{algorithm}_{doa_mode}_{steering_model}"
+    metrics = pd.read_csv(out / "null_metrics_by_jammer.csv", sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
+
+    assert (out / "run_log.txt").exists()
+    assert (out / "output_data" / "matrices_complex.npz").exists()
+    assert set(metrics["algorithm"]) == {algorithm}
+    assert set(metrics["doa_mode"]) == {doa_mode}
+    assert len(metrics) == cfg.jammer.num_jammers * len(cfg.scan.null_thresholds_dB)
+    assert metrics["null_depth_dB"].notna().all()
 
 
 @pytest.mark.parametrize("algorithm", ["lcmv", "power_inversion"])

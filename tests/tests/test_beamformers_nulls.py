@@ -8,6 +8,12 @@ from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matri
 from crpa_sim.null_metrics import circular_azimuth_width_deg, compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_region_2d, measure_null_width_1d, summarize_null_metrics
 from crpa_sim.patterns import make_scan_vectors
 
+
+def _ideal_config(config):
+    """Devuelve una configuracion ideal para tests con aserciones ideales."""
+    return replace(config, array=replace(config.array, steering_model="ideal", measured_steering_file=None))
+
+
 def test_power_inversion_and_lcmv(project_config, power_inversion_config, element_positions_m, rng):
     """Valida restricciones principales de Power Inversion y LCMV.
 
@@ -25,13 +31,14 @@ def test_power_inversion_and_lcmv(project_config, power_inversion_config, elemen
     with pytest.raises(ValueError):
         compute_power_inversion_weights(replace(power_inversion_config, beamforming=replace(power_inversion_config.beamforming, power_inversion_reference_element=99)), X_pi)
 
-    jammers = build_jammer_case(project_config, rng)
-    X, _ = generate_received_snapshot_matrix(project_config, element_positions_m, jammers, rng)
-    w = compute_lcmv_weights(project_config, X, element_positions_m, jammers)
-    a_des = steering_vector(project_config, element_positions_m, project_config.beamforming.desired_azimuth_deg, project_config.beamforming.desired_elevation_deg)
+    lcmv_config = _ideal_config(project_config)
+    jammers = build_jammer_case(lcmv_config, rng)
+    X, _ = generate_received_snapshot_matrix(lcmv_config, element_positions_m, jammers, rng)
+    w = compute_lcmv_weights(lcmv_config, X, element_positions_m, jammers)
+    a_des = steering_vector(lcmv_config, element_positions_m, lcmv_config.beamforming.desired_azimuth_deg, lcmv_config.beamforming.desired_elevation_deg)
     assert np.vdot(w, a_des) == pytest.approx(1+0j, abs=1e-6)
     for jammer in jammers:
-        assert abs(np.vdot(w, steering_vector(project_config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))) < 1e-6
+        assert abs(np.vdot(w, steering_vector(lcmv_config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))) < 1e-6
 
 def test_compute_weights_selector(project_config, power_inversion_config, element_positions_m, rng):
     """Comprueba el selector de algoritmos de pesos.
@@ -62,14 +69,15 @@ def test_null_metrics(project_config, element_positions_m, rng):
     """
     assert measure_null_width_1d(np.array([-2,-1,0,1,2]), np.array([0,-20,-30,-20,0]), 0, -10) == pytest.approx(4.0)
     assert measure_null_width_1d(np.array([-1,0,1]), np.array([0,-5,0]), 0, -10) is None
-    jammers = build_jammer_case(project_config, rng)
-    X, _ = generate_received_snapshot_matrix(project_config, element_positions_m, jammers, rng)
-    w = compute_lcmv_weights(project_config, X, element_positions_m, jammers)
-    depth = compute_null_depth_dB(project_config, element_positions_m, w, jammers[0])
+    cfg = _ideal_config(project_config)
+    jammers = build_jammer_case(cfg, rng)
+    X, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+    w = compute_lcmv_weights(cfg, X, element_positions_m, jammers)
+    depth = compute_null_depth_dB(cfg, element_positions_m, w, jammers[0])
     assert depth <= -100
-    az, el = make_scan_vectors(project_config)
-    metrics, cuts = compute_null_metrics_for_jammers(project_config, element_positions_m, w, jammers, az, el, 1)
-    assert len(metrics) == len(jammers) * len(project_config.scan.null_thresholds_dB)
+    az, el = make_scan_vectors(cfg)
+    metrics, cuts = compute_null_metrics_for_jammers(cfg, element_positions_m, w, jammers, az, el, 1)
+    assert len(metrics) == len(jammers) * len(cfg.scan.null_thresholds_dB)
     assert len(cuts) == len(jammers) * 2
     assert {
         "montecarlo_index",

@@ -3,6 +3,10 @@ Evaluacion de patrones espaciales de la CRPA.
 
 El patron se calcula siempre como B(az, el) = w^H a(az, el). Los snapshots
 no se usan para dibujar el patron; se usan antes para estimar R y los pesos.
+
+La rama ideal se mantiene vectorizada exactamente como antes. La rama measured
+usa una matriz/tensor de steering medido ya construido en memoria para evitar
+buscar elemento a elemento para cada punto angular.
 """
 
 from __future__ import annotations
@@ -10,17 +14,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .array_model import steering_vector
+from .array_model import measured_steering_matrix_for_angles, steering_vector
 from .config import ProjectConfig
 
 
 def conventional_weights(config: ProjectConfig, element_positions_m: np.ndarray) -> np.ndarray:
-    """Calcula pesos delay-and-sum hacia la direccion deseada.
-
-    Parametros:
-        config: Configuracion completa; aporta azimut/elevacion deseados.
-        element_positions_m: Matriz (N, 3) con posiciones del array.
-    """
+    """Calcula pesos delay-and-sum hacia la direccion deseada."""
     a_des = steering_vector(
         config,
         element_positions_m,
@@ -28,6 +27,34 @@ def conventional_weights(config: ProjectConfig, element_positions_m: np.ndarray)
         config.beamforming.desired_elevation_deg,
     )
     return a_des / element_positions_m.shape[0]
+
+
+def _evaluate_response_complex_for_angles(
+    config: ProjectConfig,
+    element_positions_m: np.ndarray,
+    weights: np.ndarray,
+    azimuth_deg_array: np.ndarray,
+    elevation_deg_array: np.ndarray,
+) -> np.ndarray:
+    """Evalua B=w^H a(az, el) devolviendo valores complejos.
+
+    Para ideal se mantiene el calculo analitico existente. Para measured se
+    obtiene de una vez la matriz de steering medida para todos los pares az/el.
+    """
+    azimuth_deg_array = np.asarray(azimuth_deg_array, dtype=float)
+    elevation_deg_array = np.asarray(elevation_deg_array, dtype=float)
+    if len(azimuth_deg_array) != len(elevation_deg_array):
+        raise ValueError("azimuth_deg_array y elevation_deg_array deben tener la misma longitud.")
+
+    if config.array.steering_model == "measured":
+        steering = measured_steering_matrix_for_angles(config, azimuth_deg_array, elevation_deg_array)
+        return steering @ np.conjugate(weights)
+
+    values = []
+    for az, el in zip(azimuth_deg_array, elevation_deg_array):
+        a = steering_vector(config, element_positions_m, float(az), float(el))
+        values.append(np.vdot(weights, a))
+    return np.asarray(values)
 
 
 def evaluate_response_for_angles(
@@ -38,26 +65,15 @@ def evaluate_response_for_angles(
     elevation_deg_array: np.ndarray,
     normalize: bool = True,
 ) -> pd.DataFrame:
-    """Evalua B=w^H a(az, el) en una lista de pares angulares.
+    """Evalua B=w^H a(az, el) en una lista de pares angulares."""
+    values = _evaluate_response_complex_for_angles(
+        config,
+        element_positions_m,
+        weights,
+        azimuth_deg_array,
+        elevation_deg_array,
+    )
 
-    Parametros:
-        config: Configuracion completa usada para construir steering vectors.
-        element_positions_m: Matriz (N, 3) con posiciones del array.
-        weights: Vector complejo de pesos del beamformer.
-        azimuth_deg_array: Vector de azimuts, en grados.
-        elevation_deg_array: Vector de elevaciones, en grados; debe tener la
-            misma longitud que azimuth_deg_array.
-        normalize: Si es True, normaliza la magnitud por el maximo del corte.
-    """
-    if len(azimuth_deg_array) != len(elevation_deg_array):
-        raise ValueError("azimuth_deg_array y elevation_deg_array deben tener la misma longitud.")
-
-    values = []
-    for az, el in zip(azimuth_deg_array, elevation_deg_array):
-        a = steering_vector(config, element_positions_m, float(az), float(el))
-        values.append(np.vdot(weights, a))
-
-    values = np.asarray(values)
     response_abs = np.abs(values)
     response_abs_norm = response_abs / (np.max(response_abs) + 1e-15) if normalize else response_abs
     response_dB_norm = 20.0 * np.log10(response_abs_norm + 1e-12)
@@ -82,15 +98,7 @@ def compute_azimuth_response_cut(
     azimuth_scan_deg: np.ndarray,
     fixed_elevation_deg: float,
 ) -> pd.DataFrame:
-    """Calcula un corte de patron variando azimut con elevacion fija.
-
-    Parametros:
-        config: Configuracion completa del proyecto.
-        element_positions_m: Matriz (N, 3) con posiciones del array.
-        weights: Vector complejo de pesos del beamformer.
-        azimuth_scan_deg: Vector de azimuts a evaluar, en grados.
-        fixed_elevation_deg: Elevacion fija del corte, en grados.
-    """
+    """Calcula un corte de patron variando azimut con elevacion fija."""
     elevations = np.full_like(azimuth_scan_deg, fixed_elevation_deg, dtype=float)
     return evaluate_response_for_angles(config, element_positions_m, weights, azimuth_scan_deg, elevations)
 
@@ -102,15 +110,7 @@ def compute_elevation_response_cut(
     elevation_scan_deg: np.ndarray,
     fixed_azimuth_deg: float,
 ) -> pd.DataFrame:
-    """Calcula un corte de patron variando elevacion con azimut fijo.
-
-    Parametros:
-        config: Configuracion completa del proyecto.
-        element_positions_m: Matriz (N, 3) con posiciones del array.
-        weights: Vector complejo de pesos del beamformer.
-        elevation_scan_deg: Vector de elevaciones a evaluar, en grados.
-        fixed_azimuth_deg: Azimut fijo del corte, en grados.
-    """
+    """Calcula un corte de patron variando elevacion con azimut fijo."""
     azimuths = np.full_like(elevation_scan_deg, fixed_azimuth_deg, dtype=float)
     return evaluate_response_for_angles(config, element_positions_m, weights, azimuths, elevation_scan_deg)
 
@@ -122,20 +122,13 @@ def compute_2d_response_grid(
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    """Evalua el patron en una malla 2D azimut/elevacion.
-
-    Parametros:
-        config: Configuracion completa usada para steering y longitud de onda.
-        element_positions_m: Matriz (N, 3) con posiciones del array.
-        weights: Vector complejo de pesos del beamformer.
-        azimuth_scan_deg: Vector de azimuts que define el eje X de la malla.
-        elevation_scan_deg: Vector de elevaciones que define el eje Y.
-    """
+    """Evalua el patron en una malla 2D azimut/elevacion."""
     az_grid, el_grid = np.meshgrid(azimuth_scan_deg, elevation_scan_deg, indexing="xy")
     az_flat = az_grid.ravel()
     el_flat = el_grid.ravel()
 
     if config.array.steering_model == "ideal":
+        # Rama ideal: se conserva el calculo vectorizado original.
         az_rad = np.deg2rad(az_flat)
         el_rad = np.deg2rad(el_flat)
         u = np.column_stack([
@@ -147,12 +140,13 @@ def compute_2d_response_grid(
         phase = k_rad_m * (u @ element_positions_m.T)
         steering = np.exp(1j * phase)
         response_complex = steering @ np.conjugate(weights)
+    elif config.array.steering_model == "measured":
+        # Rama measured optimizada: steering para toda la malla en una matriz.
+        # Shape: (num_puntos_malla, num_elementos).
+        steering = measured_steering_matrix_for_angles(config, az_flat, el_flat)
+        response_complex = steering @ np.conjugate(weights)
     else:
-        response_complex = []
-        for az, el in zip(az_flat, el_flat):
-            a = steering_vector(config, element_positions_m, float(az), float(el))
-            response_complex.append(np.vdot(weights, a))
-        response_complex = np.asarray(response_complex)
+        raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
 
     response_abs = np.abs(response_complex).reshape(az_grid.shape)
     response_power = response_abs**2
@@ -168,12 +162,7 @@ def compute_2d_response_grid(
 
 
 def make_scan_vectors(config: ProjectConfig) -> tuple[np.ndarray, np.ndarray]:
-    """Crea los vectores de barrido angular a partir de la configuracion.
-
-    Parametros:
-        config: Configuracion completa; se usa config.scan para minimos,
-            maximos y pasos de azimut/elevacion.
-    """
+    """Crea los vectores de barrido angular a partir de la configuracion."""
     az = np.arange(
         config.scan.azimuth_scan_min_deg,
         config.scan.azimuth_scan_max_deg + config.scan.azimuth_scan_step_deg,

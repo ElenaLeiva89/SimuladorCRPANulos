@@ -3,6 +3,9 @@ import numpy as np
 import pytest
 from crpa_sim.array_model import create_crpa_geometry, direction_unit_vector, steering_vector, steering_vector_ideal
 
+
+MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
+
 def test_geometry_and_direction(project_config):
     """Verifica geometria hexagonal y conversion azimut/elevacion.
 
@@ -19,19 +22,33 @@ def test_geometry_and_direction(project_config):
     assert u[2] == pytest.approx(1.0)
 
 def test_steering_vector_models(project_config, element_positions_m):
-    """Comprueba steering ideal y errores de modelos no implementados.
+    """Comprueba steering ideal, steering medido y modelos invalidos.
 
     Parametros:
         project_config: Configuracion base de simulacion.
         element_positions_m: Posiciones XYZ del array.
     """
+    ideal = replace(project_config, array=replace(project_config.array, steering_model="ideal", measured_steering_file=None))
     a = steering_vector_ideal(element_positions_m, 40, 10, project_config.signal.wavelength_m)
     assert a.shape == (7,)
     assert np.allclose(np.abs(a), 1.0)
-    assert steering_vector(project_config, element_positions_m, 40, 10).shape == (7,)
-    measured = replace(project_config, array=replace(project_config.array, steering_model="measured"))
-    with pytest.raises(NotImplementedError):
-        steering_vector(measured, element_positions_m, 40, 10)
+    assert steering_vector(ideal, element_positions_m, 40, 10).shape == (7,)
+
+    measured = replace(
+        project_config,
+        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
+    )
+    measured_vector = steering_vector(measured, element_positions_m, 40, 10)
+    assert measured_vector.shape == (7,)
+    assert np.all(np.isfinite(measured_vector))
+
+    measured_without_file = replace(
+        project_config,
+        array=replace(project_config.array, steering_model="measured", measured_steering_file=None),
+    )
+    with pytest.raises(ValueError, match="measured_steering_file"):
+        steering_vector(measured_without_file, element_positions_m, 40, 10)
+
     bad = replace(project_config, array=replace(project_config.array, steering_model="bad"))
     with pytest.raises(ValueError):
         steering_vector(bad, element_positions_m, 40, 10)

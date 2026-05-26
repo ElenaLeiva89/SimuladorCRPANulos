@@ -262,6 +262,10 @@ de posiciones.
   "null_thresholds_dB": [-10, -20, -30, -40, -50]
 }
 ```
+Los parametros de "azimuth_scan_step_deg": 0.5 y "elevation_scan_step_deg": 0.5 son valores 
+muy pequeños que permiten el calculo para la CRPA ideal pero que hacen muy complejo el calculo
+del steering vector de la CRPA real.
+Se recomienda asignar valores mas altos para la CRPA real y no realentizar el calculo.
 
 Variables:
 

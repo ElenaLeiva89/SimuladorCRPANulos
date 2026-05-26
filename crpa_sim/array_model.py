@@ -3,7 +3,7 @@ Geometria CRPA y steering vectors.
 
 Soporta dos modelos:
 - steering_model="ideal": steering vector teorico con elementos isotropicos.
-- steering_model="measured": steering vector interpolado/seleccionado desde medidas reales.
+- steering_model="measured": steering vector seleccionado desde medidas reales.
 
 Formato CSV esperado para steering_model="measured":
     azimuth_deg,elevation_deg,element_index,amplitude,phase_deg
@@ -11,10 +11,15 @@ Formato CSV esperado para steering_model="measured":
     0,90,1,0.98,12.5
     ...
 
+o alternativamente:
+    azimuth_deg,elevation_deg,element_index,real,imag
+
 Notas:
 - element_index puede venir indexado desde 0 o desde 1; se normaliza internamente.
-- Si hay varias muestras cercanas, se usa el punto medido mas cercano en distancia angular az/el.
 - El azimut se trata como circular: 330 deg equivale a -30 deg.
+- El CSV se lee una sola vez y se guarda en cache.
+- Para el modelo measured se construye una tabla/tensor de steering por direccion
+  medida: una fila por direccion (az, el) y una columna por elemento.
 """
 
 from __future__ import annotations
@@ -32,25 +37,24 @@ from .config import ArrayConfig, ProjectConfig
 class MeasuredSteeringTable:
     """Tabla interna con diagramas/steering medidos de la CRPA."""
 
+    # Formato original fila-a-fila, se mantiene por compatibilidad.
     azimuth_deg: np.ndarray
     elevation_deg: np.ndarray
     element_index: np.ndarray
     steering_value: np.ndarray
     num_elements: int
 
+    # Formato optimizado: una direccion medida -> steering completo de N elementos.
+    measured_azimuth_deg: np.ndarray
+    measured_elevation_deg: np.ndarray
+    measured_steering_matrix: np.ndarray  # shape = (num_directions, num_elements)
+
 
 _MEASURED_STEERING_CACHE: dict[tuple[str, int], MeasuredSteeringTable] = {}
 
 
 def create_crpa_geometry(array_config: ArrayConfig, element_spacing_m: float) -> np.ndarray:
-    """Crea las posiciones 3D de la CRPA ideal hexagonal de 7 elementos.
-
-    Parametros:
-        array_config: Configuracion geometrica del array; debe indicar
-            geometry="hexagonal_7" y num_elements=7.
-        element_spacing_m: Separacion radial entre el elemento central y
-            cada elemento exterior, expresada en metros.
-    """
+    """Crea las posiciones 3D de la CRPA ideal hexagonal de 7 elementos."""
     if array_config.geometry != "hexagonal_7" or array_config.num_elements != 7:
         raise ValueError("Actualmente solo se implementa geometry='hexagonal_7' con num_elements=7.")
 
@@ -67,12 +71,7 @@ def create_crpa_geometry(array_config: ArrayConfig, element_spacing_m: float) ->
 
 
 def direction_unit_vector(azimuth_deg: float, elevation_deg: float) -> np.ndarray:
-    """Convierte azimut/elevacion a vector unitario 3D.
-
-    Parametros:
-        azimuth_deg: Angulo de azimut en grados; 0 apunta a +X y crece hacia +Y.
-        elevation_deg: Angulo de elevacion en grados; 0 es horizonte y 90 cenit.
-    """
+    """Convierte azimut/elevacion a vector unitario 3D."""
     az = np.deg2rad(azimuth_deg)
     el = np.deg2rad(elevation_deg)
     return np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
@@ -96,7 +95,7 @@ def _wrap_angle_180(angle_deg: np.ndarray | float) -> np.ndarray | float:
     return ((np.asarray(angle_deg) + 180.0) % 360.0) - 180.0
 
 
-def _angular_delta_deg(a_deg: np.ndarray, b_deg: float) -> np.ndarray:
+def _angular_delta_deg(a_deg: np.ndarray, b_deg: np.ndarray | float) -> np.ndarray:
     """Diferencia angular circular a-b en grados, rango [-180, 180)."""
     return ((a_deg - b_deg + 180.0) % 360.0) - 180.0
 
@@ -107,6 +106,49 @@ def _resolve_measured_file(path_text: str) -> Path:
     if path.is_absolute():
         return path
     return Path.cwd() / path
+
+
+def _build_direction_steering_matrix(
+    azimuth_deg: np.ndarray,
+    elevation_deg: np.ndarray,
+    element_index: np.ndarray,
+    steering_value: np.ndarray,
+    num_elements: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Construye una matriz optimizada de steering completo por direccion.
+
+    Devuelve:
+        measured_azimuth_deg: vector de azimuts medidos unicos.
+        measured_elevation_deg: vector de elevaciones medidas unicas.
+        measured_steering_matrix: matriz (num_directions, num_elements).
+
+    Si hay varias muestras para la misma direccion/elemento, se promedia su
+    valor complejo; esto cubre la costura circular -180/180 del CSV medido.
+    """
+    # Redondeo solo para clave de agrupacion y evitar problemas de coma flotante
+    # en CSV con valores como 44.999999999.
+    direction_keys = np.column_stack([np.round(azimuth_deg, 10), np.round(elevation_deg, 10)])
+    unique_keys, inverse = np.unique(direction_keys, axis=0, return_inverse=True)
+
+    steering_sum = np.zeros((unique_keys.shape[0], num_elements), dtype=complex)
+    sample_count = np.zeros((unique_keys.shape[0], num_elements), dtype=int)
+
+    for row_idx, dir_idx in enumerate(inverse):
+        elem_idx = int(element_index[row_idx])
+        steering_sum[dir_idx, elem_idx] += steering_value[row_idx]
+        sample_count[dir_idx, elem_idx] += 1
+
+    incomplete = np.argwhere(sample_count == 0)
+    if incomplete.size:
+        dir_idx, elem_idx = incomplete[0]
+        raise ValueError(
+            "El fichero medido debe tener una muestra por cada elemento en cada direccion. "
+            f"Falta element_index={elem_idx} para az={unique_keys[dir_idx, 0]}, el={unique_keys[dir_idx, 1]}."
+        )
+
+    steering_matrix = steering_sum / sample_count
+
+    return unique_keys[:, 0].astype(float), unique_keys[:, 1].astype(float), steering_matrix
 
 
 def load_measured_steering_table(path_text: str, num_elements: int) -> MeasuredSteeringTable:
@@ -154,7 +196,7 @@ def load_measured_steering_table(path_text: str, num_elements: int) -> MeasuredS
             try:
                 az = float(row[normalized_fields["azimuth_deg"]])
                 el = float(row[normalized_fields["elevation_deg"]])
-                element_index = int(float(row[normalized_fields["element_index"]]))
+                elem_idx = int(float(row[normalized_fields["element_index"]]))
 
                 if has_amp_phase:
                     amplitude = float(row[normalized_fields["amplitude"]])
@@ -169,7 +211,7 @@ def load_measured_steering_table(path_text: str, num_elements: int) -> MeasuredS
 
             azimuths.append(float(_wrap_angle_180(az)))
             elevations.append(el)
-            element_indices.append(element_index)
+            element_indices.append(elem_idx)
             values.append(value)
 
     if not values:
@@ -186,15 +228,75 @@ def load_measured_steering_table(path_text: str, num_elements: int) -> MeasuredS
             f"element_index fuera de rango en {path}. Debe ser 0..{num_elements-1} o 1..{num_elements}."
         )
 
+    az_array = np.asarray(azimuths, dtype=float)
+    el_array = np.asarray(elevations, dtype=float)
+    steering_array = np.asarray(values, dtype=complex)
+
+    measured_az, measured_el, measured_matrix = _build_direction_steering_matrix(
+        az_array,
+        el_array,
+        element_indices_array,
+        steering_array,
+        int(num_elements),
+    )
+
     table = MeasuredSteeringTable(
-        azimuth_deg=np.asarray(azimuths, dtype=float),
-        elevation_deg=np.asarray(elevations, dtype=float),
+        azimuth_deg=az_array,
+        elevation_deg=el_array,
         element_index=element_indices_array,
-        steering_value=np.asarray(values, dtype=complex),
+        steering_value=steering_array,
         num_elements=int(num_elements),
+        measured_azimuth_deg=measured_az,
+        measured_elevation_deg=measured_el,
+        measured_steering_matrix=measured_matrix,
     )
     _MEASURED_STEERING_CACHE[cache_key] = table
     return table
+
+
+def measured_steering_matrix_for_angles(
+    config: ProjectConfig,
+    azimuth_deg_array: np.ndarray,
+    elevation_deg_array: np.ndarray,
+    chunk_size: int = 20000,
+) -> np.ndarray:
+    """Devuelve un steering medido por cada par angular de entrada.
+
+    Salida:
+        Matriz compleja de forma (num_direcciones, num_elementos).
+
+    Implementacion:
+        - El CSV ya esta en cache.
+        - La busqueda nearest-neighbor se hace vectorizada contra las direcciones
+          medidas completas, no elemento a elemento.
+        - Se procesa por bloques para no consumir memoria excesiva si la malla es grande.
+    """
+    measured_file = config.array.measured_steering_file
+    if not measured_file:
+        raise ValueError("steering_model='measured' requiere array_config.measured_steering_file en el JSON.")
+
+    table = load_measured_steering_table(measured_file, config.array.num_elements)
+
+    az_targets = np.asarray(_wrap_angle_180(azimuth_deg_array), dtype=float).ravel()
+    el_targets = np.asarray(elevation_deg_array, dtype=float).ravel()
+    if az_targets.shape != el_targets.shape:
+        raise ValueError("azimuth_deg_array y elevation_deg_array deben tener la misma longitud.")
+
+    output = np.empty((az_targets.size, table.num_elements), dtype=complex)
+    measured_az = table.measured_azimuth_deg
+    measured_el = table.measured_elevation_deg
+
+    for start in range(0, az_targets.size, chunk_size):
+        stop = min(start + chunk_size, az_targets.size)
+        az_block = az_targets[start:stop, None]
+        el_block = el_targets[start:stop, None]
+
+        az_delta = _angular_delta_deg(measured_az[None, :], az_block)
+        el_delta = measured_el[None, :] - el_block
+        nearest_dir_idx = np.argmin(az_delta**2 + el_delta**2, axis=1)
+        output[start:stop, :] = table.measured_steering_matrix[nearest_dir_idx, :]
+
+    return output
 
 
 def steering_vector_measured(
@@ -202,42 +304,12 @@ def steering_vector_measured(
     azimuth_deg: float,
     elevation_deg: float,
 ) -> np.ndarray:
-    """Devuelve steering vector medido usando el punto angular mas cercano.
-
-    Para cada elemento de la CRPA se selecciona la muestra medida mas cercana
-    en azimut/elevacion. Esto evita depender de scipy y funciona con mallas
-    medidas irregulares.
-    """
-    measured_file = config.array.measured_steering_file
-    if not measured_file:
-        raise ValueError(
-            "steering_model='measured' requiere array_config.measured_steering_file en el JSON."
-        )
-
-    table = load_measured_steering_table(measured_file, config.array.num_elements)
-
-    az_target = float(_wrap_angle_180(azimuth_deg))
-    el_target = float(elevation_deg)
-
-    result = np.zeros(config.array.num_elements, dtype=complex)
-
-    for element_idx in range(config.array.num_elements):
-        mask = table.element_index == element_idx
-        if not np.any(mask):
-            raise ValueError(
-                f"El fichero medido no contiene muestras para element_index={element_idx}."
-            )
-
-        az_candidates = table.azimuth_deg[mask]
-        el_candidates = table.elevation_deg[mask]
-        val_candidates = table.steering_value[mask]
-
-        az_delta = _angular_delta_deg(az_candidates, az_target)
-        el_delta = el_candidates - el_target
-        nearest_idx = int(np.argmin(az_delta**2 + el_delta**2))
-        result[element_idx] = val_candidates[nearest_idx]
-
-    return result
+    """Devuelve un steering vector medido para una direccion concreta."""
+    return measured_steering_matrix_for_angles(
+        config,
+        np.asarray([azimuth_deg], dtype=float),
+        np.asarray([elevation_deg], dtype=float),
+    )[0]
 
 
 def steering_vector(
@@ -246,15 +318,7 @@ def steering_vector(
     azimuth_deg: float,
     elevation_deg: float,
 ) -> np.ndarray:
-    """Devuelve el steering vector segun el modelo configurado.
-
-    Parametros:
-        config: Configuracion completa, usada para escoger el modelo y la
-            longitud de onda.
-        element_positions_m: Matriz (N, 3) con posiciones XYZ del array.
-        azimuth_deg: Azimut de evaluacion en grados.
-        elevation_deg: Elevacion de evaluacion en grados.
-    """
+    """Devuelve el steering vector segun el modelo configurado."""
     if config.array.steering_model == "ideal":
         return steering_vector_ideal(
             element_positions_m,

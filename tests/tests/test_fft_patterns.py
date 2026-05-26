@@ -5,6 +5,10 @@ import pytest
 from crpa_sim.fft_tools import temporal_fft_snapshot_matrix
 from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, conventional_weights, evaluate_response_for_angles, make_scan_vectors
 
+
+MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
+
+
 def test_fft_size_and_tone_detection(rng):
     """Verifica tamano de FFT y localizacion de un tono sintetico.
 
@@ -57,17 +61,21 @@ def test_patterns(project_config, element_positions_m):
     assert scan_el[-1] >= project_config.scan.elevation_scan_max_deg
 
 
-def test_2d_grid_uses_non_ideal_steering_path(project_config, element_positions_m):
-    """Comprueba la rama no vectorizada de malla 2D y sus errores.
+def test_2d_grid_uses_measured_steering_path(project_config, element_positions_m):
+    """Comprueba la rama no vectorizada de malla 2D con steering medido.
 
     Parametros:
         project_config: Configuracion base de simulacion.
         element_positions_m: Posiciones XYZ del array.
     """
-    measured = replace(project_config, array=replace(project_config.array, steering_model="measured"))
+    measured = replace(
+        project_config,
+        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
+    )
     w = conventional_weights(project_config, element_positions_m)
-    with pytest.raises(NotImplementedError):
-        compute_2d_response_grid(measured, element_positions_m, w, np.array([0.0]), np.array([90.0]))
+    grid = compute_2d_response_grid(measured, element_positions_m, w, np.array([0.0]), np.array([90.0]))
+    assert grid["response_abs"].shape == (1, 1)
+    assert np.isfinite(grid["response_power_dB"]).all()
 
 
 def test_make_scan_vectors_includes_configured_upper_edge(project_config):
