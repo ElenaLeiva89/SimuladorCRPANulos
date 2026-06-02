@@ -52,8 +52,8 @@ def project_config(base_config: ProjectConfig, tmp_path: Path) -> ProjectConfig:
         ),
         scan=replace(
             base_config.scan,
-            azimuth_scan_min_deg=-180.0,
-            azimuth_scan_max_deg=180.0,
+            azimuth_scan_min_deg=0.0,
+            azimuth_scan_max_deg=360.0,
             azimuth_scan_step_deg=10.0,
             elevation_scan_min_deg=0.0,
             elevation_scan_max_deg=90.0,
@@ -121,7 +121,7 @@ def config_json_path(project_config: ProjectConfig, tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def fast_config(base_config: ProjectConfig, tmp_path: Path) -> ProjectConfig:
-    """Configuracion ligera para tests automáticos: sin plots y con pocos snapshots."""
+    """Configuracion ligera para tests automaticos: sin plots y con pocos snapshots."""
     return replace(
         base_config,
         signal=replace(base_config.signal, num_snapshots=512, fft_size=512),

@@ -54,7 +54,8 @@ def measure_null_width_1d(angle_grid_deg: np.ndarray, response_dB: np.ndarray, j
     """
     angle_grid_deg = np.asarray(angle_grid_deg, dtype=float)
     response_dB = np.asarray(response_dB, dtype=float)
-    idx = int(np.argmin(np.abs(angle_grid_deg - jammer_angle_deg)))
+    delta = ((angle_grid_deg - jammer_angle_deg + 180.0) % 360.0) - 180.0
+    idx = int(np.argmin(np.abs(delta)))
 
     if response_dB[idx] > threshold_dB:
         return None
@@ -124,7 +125,7 @@ def compute_null_metrics_for_jammers(
         cuts[f"{cut_prefix}_elevation_cut"] = el_cut
 
         null_depth = compute_null_depth_dB(config, element_positions_m, weights, jammer, reference_gain_abs=1.0)
-        jammer_azimuth_for_width_deg = wrap_angle_180(jammer.azimuth_deg)
+        jammer_azimuth_for_width_deg = jammer.azimuth_deg % 360.0
 
         for threshold in config.scan.null_thresholds_dB:
             width_az = measure_null_width_1d(
@@ -176,6 +177,9 @@ def compute_null_metrics_for_jammers(
 def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     """Agrupa metricas Monte Carlo por jammer y umbral de atenuacion.
 
+    El resumen conserva solo las metricas principales: profundidad del nulo y
+    anchuras 2D. La tabla completa por jammer mantiene las anchuras 1D y area.
+
     Parametros:
         metrics: Tabla devuelta por compute_null_metrics_for_jammers,
             concatenada para una o varias iteraciones Monte Carlo.
@@ -187,10 +191,6 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
 
     numeric_cols = [
         "null_depth_dB",
-        "null_width_azimuth_deg",
-        "null_width_elevation_deg",
-        "null_area_cells_2d",
-        "null_area_deg2_2d",
         "null_width_azimuth_2d_deg",
         "null_width_elevation_2d_deg",
     ]
@@ -209,9 +209,11 @@ def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
 
     return summary.round(2)
 
+
 def wrap_angle_180(angle_deg: float) -> float:
     """Normaliza un azimut al rango [-180, 180)."""
     return ((angle_deg + 180.0) % 360.0) - 180.0
+
 
 def circular_azimuth_width_deg(angles_deg: np.ndarray) -> float:
     """Calcula la anchura angular minima teniendo en cuenta wrap-around.
@@ -232,6 +234,7 @@ def circular_azimuth_width_deg(angles_deg: np.ndarray) -> float:
     max_gap = max(np.max(diffs), wrap_gap)
 
     return float(360.0 - max_gap)
+
 
 def measure_null_region_2d(
     az_grid_deg: np.ndarray,

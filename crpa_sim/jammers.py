@@ -104,6 +104,10 @@ def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[J
         else:
             raise ValueError(f"doa_mode no soportado: {config.simulation.doa_mode}")
 
+        # Mantiene una convencion unica para tablas y plots aunque se construyan
+        # configuraciones manuales con azimut equivalente negativo.
+        az = az % 360.0
+
         jammers.append(
             JammerInstance(
                 name=template.name,

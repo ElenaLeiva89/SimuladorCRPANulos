@@ -66,7 +66,7 @@ def test_variable_doa_is_reproducible_per_montecarlo_seed(project_config):
         jammer=replace(
             project_config.jammer,
             num_jammers=2,
-            variable_doa_azimuth_range_deg=(-40.0, 40.0),
+            variable_doa_azimuth_range_deg=(0.0, 80.0),
             variable_doa_elevation_range_deg=(10.0, 80.0),
         ),
     )
@@ -81,7 +81,7 @@ def test_variable_doa_is_reproducible_per_montecarlo_seed(project_config):
 
     np.testing.assert_allclose(first_coords, repeat_coords)
     assert not np.allclose(first_coords, second_coords)
-    assert np.all((-40.0 <= first_coords[:, 0]) & (first_coords[:, 0] <= 40.0))
+    assert np.all((0.0 <= first_coords[:, 0]) & (first_coords[:, 0] <= 80.0))
     assert np.all((10.0 <= first_coords[:, 1]) & (first_coords[:, 1] <= 80.0))
 
 

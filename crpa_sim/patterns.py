@@ -174,3 +174,63 @@ def make_scan_vectors(config: ProjectConfig) -> tuple[np.ndarray, np.ndarray]:
         config.scan.elevation_scan_step_deg,
     )
     return az, el
+
+
+def compute_elevation_response_cut_for_plot(
+    config: ProjectConfig,
+    element_positions_m: np.ndarray,
+    weights: np.ndarray,
+    elevation_scan_deg: np.ndarray,
+    fixed_azimuth_deg: float,
+) -> pd.DataFrame:
+    """Construye el corte vertical simetrico que espera el plot polar.
+
+    El eje polar de elevacion representa horizonte izquierdo, cenit y
+    horizonte derecho. Para ello se evalua el lado izquierdo con
+    `fixed_azimuth + 180` y el lado derecho con `fixed_azimuth`.
+    """
+    elevation_scan_deg = np.asarray(elevation_scan_deg, dtype=float)
+    elevation_scan_deg = elevation_scan_deg[
+        (elevation_scan_deg >= 0.0) & (elevation_scan_deg <= 90.0)
+    ]
+
+    az_right = fixed_azimuth_deg % 360.0
+    az_left = (fixed_azimuth_deg + 180.0) % 360.0
+
+    # Lado izquierdo: horizonte izquierdo -> cenit
+    el_left = elevation_scan_deg
+    az_left_vec = np.full_like(el_left, az_left, dtype=float)
+    left = evaluate_response_for_angles(
+        config,
+        element_positions_m,
+        weights,
+        az_left_vec,
+        el_left,
+    )
+    left["polar_theta_deg"] = -90.0 + left["elevation_deg"]
+    left["plot_side"] = "left"
+    left["cut_azimuth_deg"] = az_left
+
+    # Lado derecho: cenit -> horizonte derecho
+    el_right = elevation_scan_deg[::-1]
+    az_right_vec = np.full_like(el_right, az_right, dtype=float)
+    right = evaluate_response_for_angles(
+        config,
+        element_positions_m,
+        weights,
+        az_right_vec,
+        el_right,
+    )
+    right["polar_theta_deg"] = 90.0 - right["elevation_deg"]
+    right["plot_side"] = "right"
+    right["cut_azimuth_deg"] = az_right
+
+    cut = pd.concat([left, right], ignore_index=True)
+    max_abs = cut["response_abs"].max()
+
+    cut["response_abs_normalized"] = cut["response_abs"] / (max_abs + 1e-15)
+    cut["response_dB_normalized"] = 20.0 * np.log10(
+        cut["response_abs_normalized"] + 1e-12
+    )
+
+    return cut

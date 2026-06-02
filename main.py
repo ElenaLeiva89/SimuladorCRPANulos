@@ -37,7 +37,7 @@ from crpa_sim.null_metrics import compute_null_metrics_for_jammers, summarize_nu
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
-    compute_elevation_response_cut,
+    compute_elevation_response_cut_for_plot,
     conventional_weights,
     make_scan_vectors,
 )
@@ -49,7 +49,6 @@ from crpa_sim.plots import (
     plot_pattern_elevation,
     plot_temporal_spectrum,
 )
-
 
 def _case_rng(base_seed: int, montecarlo_index: int) -> np.random.Generator:
     """Crea un generador reproducible para una iteracion Monte Carlo.
@@ -117,7 +116,7 @@ def _save_global_outputs(
             azimuth_scan_deg,
             fixed_elevation_deg=config.beamforming.desired_elevation_deg,
         )
-        radiation_el = compute_elevation_response_cut(
+        radiation_el = compute_elevation_response_cut_for_plot(
             config,
             element_positions_m,
             selected_weights,
@@ -125,8 +124,6 @@ def _save_global_outputs(
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
-        # jammer_az = list(zip(jammer_table["name"], jammer_table["azimuth_deg"])) if not jammer_table.empty else []
-        # jammer_el = list(zip(jammer_table["name"], jammer_table["elevation_deg"])) if not jammer_table.empty else []
         jammer_az = ([(row["name"], row["azimuth_deg"], int(row["jammer_index"]) - 1) 
                 for _, row in jammer_table.iterrows()]
                     if not jammer_table.empty
@@ -194,7 +191,7 @@ def _save_jammer_plots(
         jam_dir.mkdir(parents=True, exist_ok=True)
 
         radiation_az = compute_azimuth_response_cut(config, element_positions_m, selected_weights, azimuth_scan_deg, jammer.elevation_deg)
-        radiation_el = compute_elevation_response_cut(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
+        radiation_el = compute_elevation_response_cut_for_plot(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
 
         title_base = f"{tag} - az={jammer.azimuth_deg:.1f} deg, el={jammer.elevation_deg:.1f} deg - {config.beamforming.algorithm}"
         plot_pattern_azimuth(

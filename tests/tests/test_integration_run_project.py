@@ -43,7 +43,7 @@ def test_run_project_creates_core_artifacts_without_plots(fast_config, tmp_path)
 
     summary = pd.read_csv(out / "null_metrics_summary.csv", sep=fast_config.output.csv_separator, decimal=fast_config.output.csv_decimal)
     assert not summary.empty
-    assert {"jammer_name", "attenuation_threshold_dB", "null_depth_dB", "null_width_azimuth_deg", "null_width_elevation_deg"}.issubset(summary.columns)
+    assert {"jammer_name", "attenuation_threshold_dB", "null_depth_dB", "null_width_azimuth_2d_deg", "null_width_elevation_2d_deg"}.issubset(summary.columns)
 
 
 def test_run_project_resolves_output_dir_template(fast_config, tmp_path):
@@ -99,8 +99,8 @@ def test_run_project_supports_steering_doa_algorithm_combinations(
         beamforming=replace(base.beamforming, algorithm=algorithm, power_inversion_reference_element=0),
         scan=replace(
             base.scan,
-            azimuth_scan_min_deg=-20.0,
-            azimuth_scan_max_deg=20.0,
+            azimuth_scan_min_deg=0.0,
+            azimuth_scan_max_deg=40.0,
             azimuth_scan_step_deg=20.0,
             elevation_scan_min_deg=0.0,
             elevation_scan_max_deg=90.0,
@@ -110,7 +110,7 @@ def test_run_project_supports_steering_doa_algorithm_combinations(
         jammer=replace(
             base.jammer,
             num_jammers=1,
-            variable_doa_azimuth_range_deg=(-20.0, 20.0),
+            variable_doa_azimuth_range_deg=(0.0, 40.0),
             variable_doa_elevation_range_deg=(10.0, 80.0),
         ),
         output=replace(
@@ -152,7 +152,7 @@ def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm,
         jammer=replace(
             fast_config.jammer,
             num_jammers=1,
-            variable_doa_azimuth_range_deg=(-45.0, 45.0),
+            variable_doa_azimuth_range_deg=(0.0, 90.0),
             variable_doa_elevation_range_deg=(15.0, 75.0),
         ),
         output=replace(fast_config.output, output_dir=str(tmp_path / f"results_variable_{algorithm}")),
@@ -169,7 +169,7 @@ def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm,
     assert set(metrics["algorithm"]) == {algorithm}
     assert set(metrics["montecarlo_index"]) == {1, 2, 3}
     assert len(metrics) == cfg.simulation.num_montecarlo * cfg.jammer.num_jammers * len(cfg.scan.null_thresholds_dB)
-    assert metrics["jammer_azimuth_deg"].between(-45.0, 45.0).all()
+    assert metrics["jammer_azimuth_deg"].between(0.0, 90.0).all()
     assert metrics["jammer_elevation_deg"].between(15.0, 75.0).all()
     assert metrics.groupby("montecarlo_index")["jammer_azimuth_deg"].first().nunique() > 1
     assert not summary.empty

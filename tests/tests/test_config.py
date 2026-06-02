@@ -51,7 +51,7 @@ def test_valid_config_parsing():
     """
     sim = SimulationConfig.from_dict({"num_montecarlo": "2", "random_seed": "3", "doa_mode": "VARIABLE"})
     bf = BeamformingConfig.from_dict({"algorithm": "LCMV", "desired_azimuth_deg": 0, "desired_elevation_deg": 90, "diagonal_loading_factor": 0.001, "power_inversion_reference_element": "0"})
-    jam = JammerConfig.from_dict({"num_jammers": "1", "jnr_dB": "40", "variable_doa_azimuth_range_deg": ["-180", "180"], "variable_doa_elevation_range_deg": ["5", "85"], "base_jammers": [{"name": "J1", "azimuth_deg": 40, "elevation_deg": 10, "signal_type": "TONE"}]})
+    jam = JammerConfig.from_dict({"num_jammers": "1", "jnr_dB": "40", "variable_doa_azimuth_range_deg": ["0", "360"], "variable_doa_elevation_range_deg": ["5", "85"], "base_jammers": [{"name": "J1", "azimuth_deg": 40, "elevation_deg": 10, "signal_type": "TONE"}]})
     assert sim.doa_mode == "variable"
     assert bf.algorithm == "lcmv"
     assert jam.base_jammers[0].signal_type == "tone"
@@ -112,6 +112,8 @@ def test_validate_project_config_rejects_physical_invalid_ranges(project_config)
         replace(project_config, scan=replace(project_config.scan, elevation_scan_step_deg=0.0)),
         replace(project_config, scan=replace(project_config.scan, azimuth_scan_min_deg=10.0, azimuth_scan_max_deg=0.0)),
         replace(project_config, scan=replace(project_config.scan, elevation_scan_min_deg=10.0, elevation_scan_max_deg=0.0)),
+        replace(project_config, scan=replace(project_config.scan, azimuth_scan_max_deg=361.0)),
+        replace(project_config, scan=replace(project_config.scan, elevation_scan_max_deg=91.0)),
         replace(project_config, noise=replace(project_config.noise, noise_power_linear=-1.0)),
     ]
 
@@ -177,6 +179,14 @@ def test_validate_project_config_rejects_invalid_variable_doa_ranges(project_con
         replace(
             project_config,
             jammer=replace(project_config.jammer, variable_doa_elevation_range_deg=(80.0, 10.0)),
+        ),
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_azimuth_range_deg=(-1.0, 20.0)),
+        ),
+        replace(
+            project_config,
+            jammer=replace(project_config.jammer, variable_doa_elevation_range_deg=(0.0, 91.0)),
         ),
     ]
 

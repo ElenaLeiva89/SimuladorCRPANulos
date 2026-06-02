@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from crpa_sim.io_utils import ensure_output_dir, load_project_config, print_generated_files, save_complex_npz, save_config_used, save_dataframe, save_run_log, validate_project_config
-from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, conventional_weights
+from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, compute_elevation_response_cut_for_plot, conventional_weights
 from crpa_sim.plots import _crpa_display_labels_clockwise, _db_to_radius, plot_3d, plot_array_geometry, plot_heatmap, plot_pattern_azimuth, plot_pattern_elevation, plot_temporal_spectrum
 from dataclasses import replace
 
@@ -83,6 +83,32 @@ def test_plots_without_jammers_and_missing_columns(project_config, element_posit
     with pytest.raises(KeyError):
         plot_heatmap({"azimuth_deg": np.array([[0.0]])}, tmp_path / "bad_heat.png", "bad")
 
+
+def test_elevation_response_cut_for_plot_builds_left_and_right_sides(project_config, element_positions_m):
+    """Verifica el corte vertical usado para plots polares de elevacion.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+        element_positions_m: Posiciones XYZ del array.
+    """
+    w = conventional_weights(project_config, element_positions_m)
+    cut = compute_elevation_response_cut_for_plot(
+        project_config,
+        element_positions_m,
+        w,
+        np.array([0.0, 30.0, 60.0, 90.0, 120.0]),
+        fixed_azimuth_deg=40.0,
+    )
+
+    assert set(cut["plot_side"]) == {"left", "right"}
+    assert len(cut) == 8
+    assert cut["elevation_deg"].between(0.0, 90.0).all()
+    assert set(cut["cut_azimuth_deg"]) == {40.0, 220.0}
+    assert cut["polar_theta_deg"].min() == pytest.approx(-90.0)
+    assert cut["polar_theta_deg"].max() == pytest.approx(90.0)
+    assert cut["response_dB_normalized"].notna().all()
+
+
 def test_main_run_project_light(config_json_path):
     """Ejecuta una simulacion ligera y comprueba salidas principales.
 
@@ -114,10 +140,6 @@ def test_main_run_project_light(config_json_path):
         "jammer_name",
         "attenuation_threshold_dB",
         "null_depth_dB",
-        "null_width_azimuth_deg",
-        "null_width_elevation_deg",
-        "null_area_cells_2d",
-        "null_area_deg2_2d",
         "null_width_azimuth_2d_deg",
         "null_width_elevation_2d_deg",
     ]

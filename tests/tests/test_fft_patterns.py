@@ -62,7 +62,7 @@ def test_patterns(project_config, element_positions_m):
 
 
 def test_2d_grid_uses_measured_steering_path(project_config, element_positions_m):
-    """Comprueba la rama no vectorizada de malla 2D con steering medido.
+    """Comprueba la rama medida de malla 2D con steering medido.
 
     Parametros:
         project_config: Configuracion base de simulacion.

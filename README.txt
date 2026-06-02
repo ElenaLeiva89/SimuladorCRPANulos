@@ -84,7 +84,7 @@ tests/
 - Elementos 2 a 7: anillo hexagonal exterior.
 - Plano del array: `XY`.
 - Boresight esperado: elevación `90.0` grados.
-- Steering actual: modelo ideal isotrópico.
+- Steering soportado: `ideal` isotropico y `measured` desde CSV real.
 
 La separación física se calcula como:
 
@@ -98,7 +98,7 @@ element_spacing_m = element_spacing_over_lambda * wavelength_m
 - El azimut crece hacia `+Y`.
 - `elevation_deg = 0`: horizonte.
 - `elevation_deg = 90`: cenit.
-- Los barridos de azimut suelen cubrir `[-180, 180]`.
+- Los barridos configurados usan azimut `[0, 360]` y elevacion `[0, 90]`.
 
 ### Señal GNSS
 
@@ -172,7 +172,8 @@ El fichero `input_config.json` contiene los siguientes bloques.
   "element_type": "isotropic",
   "element_spacing_over_lambda": 0.5,
   "array_boresight_elevation_deg": 90.0,
-  "steering_model": "ideal"
+  "steering_model": "ideal",
+  "measured_steering_file": "data/crpa_measured_steering.csv"
 }
 ```
 
@@ -183,7 +184,8 @@ Variables:
 - `element_type`: actualmente informativo, se usa `isotropic`.
 - `element_spacing_over_lambda`: separación radial en longitudes de onda.
 - `array_boresight_elevation_deg`: debe ser `90.0`.
-- `steering_model`: `ideal`; `measured` está reservado para datos reales.
+- `steering_model`: `ideal` o `measured`.
+- `measured_steering_file`: ruta CSV obligatoria cuando `steering_model = measured`.
 
 ### `signal_config`
 
@@ -253,11 +255,11 @@ de posiciones.
 
 ```json
 {
-  "azimuth_scan_min_deg": -180.0,
-  "azimuth_scan_max_deg": 180.0,
+  "azimuth_scan_min_deg": 0.0,
+  "azimuth_scan_max_deg": 360.0,
   "azimuth_scan_step_deg": 0.5,
   "elevation_scan_min_deg": 0.0,
-  "elevation_scan_max_deg": 180.0,
+  "elevation_scan_max_deg": 90.0,
   "elevation_scan_step_deg": 0.5,
   "null_thresholds_dB": [-10, -20, -30, -40, -50]
 }
@@ -295,8 +297,8 @@ Variables:
 {
   "num_jammers": 1,
   "jnr_dB": 20.0,
-  "variable_doa_azimuth_range_deg": [-180.0, 180.0],
-  "variable_doa_elevation_range_deg": [-90.0, 90.0],
+  "variable_doa_azimuth_range_deg": [0.0, 360.0],
+  "variable_doa_elevation_range_deg": [0.0, 90.0],
   "base_jammers": [
     {
       "name": "Jammer_1",
@@ -322,8 +324,8 @@ Variables:
 Campos de cada jammer:
 
 - `name`: nombre usado en tablas y figuras.
-- `azimuth_deg`: azimut fijo si `doa_mode = fixed`.
-- `elevation_deg`: elevación fija si `doa_mode = fixed`.
+- `azimuth_deg`: azimut fijo si `doa_mode = fixed`. Rango de 0º a 360º
+- `elevation_deg`: elevación fija si `doa_mode = fixed`. Rango de 0º a 90º
 - `signal_type`: `tone`, `complex_gaussian` o `chirp`.
 - `normalized_frequency`: frecuencia del tono en ciclos por muestra.
 - `bandwidth_hz`: campo reservado para modelos futuros.
@@ -434,7 +436,9 @@ Columnas principales:
 - `jammer_name`
 - `attenuation_threshold_dB`
 
-y promedia las columnas numéricas de profundidad, anchura y área.
+y promedia `null_depth_dB`, `null_width_azimuth_2d_deg` y
+`null_width_elevation_2d_deg`. La tabla completa
+`null_metrics_by_jammer.csv` conserva las anchuras 1D y el area 2D.
 
 ## Tests
 
@@ -465,8 +469,11 @@ La suite cubre:
 ## Limitaciones actuales
 
 - Solo se implementa geometría `hexagonal_7`.
-- Solo se implementa steering ideal isotrópico.
-- `steering_model = measured` está reservado y lanza `NotImplementedError`.
+- Se soporta steering `ideal` y steering `measured` por vecino mas cercano
+  sobre un CSV con amplitud/fase o real/imag por elemento.
+- El modelo `measured` no interpola entre muestras; usa la direccion medida
+  mas cercana, por lo que el paso de scan no debe ser mas fino que la malla
+  real salvo que se quiera sobremuestrear para visualizacion.
 - `bandwidth_hz` existe como campo de configuración, pero no se usa todavía
   en la generación de señal.
 - LCMV no admite más de `num_elements - 1` jammers.
@@ -479,12 +486,12 @@ El punto principal de sustitución está en:
 crpa_sim/array_model.py -> steering_vector()
 ```
 
-Actualmente:
+Actualmente se selecciona con:
 
 ```text
-steering_model = "ideal"
+steering_model = "ideal" | "measured"
 ```
 
-Una integración con datos reales debería reemplazar o extender esa función
+Una integracion con datos reales mas completa podria extender esa funcion
 para interpolar steering vectors medidos, patrones de elemento, errores de
-calibración o acoplo mutuo.
+calibracion o acoplo mutuo.

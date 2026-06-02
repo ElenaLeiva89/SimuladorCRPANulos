@@ -111,13 +111,29 @@ def validate_project_config(config: ProjectConfig) -> None:
         raise ValueError("variable_doa_azimuth_range_deg debe estar ordenado como [min, max].")
     if config.jammer.variable_doa_elevation_range_deg[0] > config.jammer.variable_doa_elevation_range_deg[1]:
         raise ValueError("variable_doa_elevation_range_deg debe estar ordenado como [min, max].")
+    # El flujo actual trabaja en azimut absoluto [0, 360] y elevacion [0, 90].
+    # Las funciones de bajo nivel siguen aceptando wrap circular cuando hace falta.
+    if not (0.0 <= config.scan.azimuth_scan_min_deg <= config.scan.azimuth_scan_max_deg <= 360.0):
+        raise ValueError("El scan de azimut debe estar en [0, 360].")
+    if not (0.0 <= config.scan.elevation_scan_min_deg <= config.scan.elevation_scan_max_deg <= 90.0):
+        raise ValueError("El scan de elevacion debe estar en [0, 90].")
+
+    az_min, az_max = config.jammer.variable_doa_azimuth_range_deg
+    el_min, el_max = config.jammer.variable_doa_elevation_range_deg
+    if not (0.0 <= az_min <= az_max <= 360.0):
+        raise ValueError("variable_doa_azimuth_range_deg debe estar en [0, 360].")
+    if not (0.0 <= el_min <= el_max <= 90.0):
+        raise ValueError("variable_doa_elevation_range_deg debe estar en [0, 90].")
 
     for template in config.jammer.base_jammers:
         if template.signal_type not in VALID_JAMMER_SIGNAL_TYPES:
             raise ValueError(f"signal_type no soportado para {template.name}: {template.signal_type}")
         if template.signal_type == "chirp" and template.chirp_frequency is None:
             raise ValueError(f"El jammer chirp {template.name} requiere chirp_frequency normalizada.")
-
+        if not (0.0 <= template.azimuth_deg <= 360.0):
+            raise ValueError(f"azimuth_deg de {template.name} debe estar en [0, 360].")
+        if not (0.0 <= template.elevation_deg <= 90.0):
+            raise ValueError(f"elevation_deg de {template.name} debe estar en [0, 90].")
 
 def save_config_used(config: ProjectConfig, output_dir: Path) -> None:
     """Guarda una copia JSON de la configuracion usada.
@@ -139,7 +155,7 @@ def save_dataframe(df: pd.DataFrame, path: Path, sep: str = ";", decimal: str = 
         sep: Separador de columnas.
         decimal: Caracter decimal para valores numericos.
     """
-    df.to_csv(path, index=False, sep=sep, decimal=decimal, float_format="%.2f",)
+    df.to_csv(path, index=False, sep=sep, decimal=decimal, float_format="%.2f")
 
 
 def save_complex_npz(path: Path, **arrays: np.ndarray) -> None:

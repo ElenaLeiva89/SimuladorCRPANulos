@@ -182,10 +182,6 @@ def test_null_metrics_empty_inputs():
             "jammer_name",
             "attenuation_threshold_dB",
             "null_depth_dB",
-            "null_width_azimuth_deg",
-            "null_width_elevation_deg",
-            "null_area_cells_2d",
-            "null_area_deg2_2d",
             "null_width_azimuth_2d_deg",
             "null_width_elevation_2d_deg",
         ]
@@ -232,9 +228,6 @@ def test_null_metrics_summary_rounds_configured_decimal_columns():
 
     rounded_columns = [
         "null_depth_dB",
-        "null_width_azimuth_deg",
-        "null_width_elevation_deg",
-        "null_area_deg2_2d",
         "null_width_azimuth_2d_deg",
         "null_width_elevation_2d_deg",
     ]

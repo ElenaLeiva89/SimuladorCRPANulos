@@ -1,7 +1,7 @@
 from dataclasses import replace
 import numpy as np
 import pytest
-from crpa_sim.array_model import create_crpa_geometry, direction_unit_vector, steering_vector, steering_vector_ideal
+from crpa_sim.array_model import create_crpa_geometry, direction_unit_vector, measured_steering_matrix_for_angles, steering_vector, steering_vector_ideal
 
 
 MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
@@ -52,6 +52,33 @@ def test_steering_vector_models(project_config, element_positions_m):
     bad = replace(project_config, array=replace(project_config.array, steering_model="bad"))
     with pytest.raises(ValueError):
         steering_vector(bad, element_positions_m, 40, 10)
+
+
+def test_measured_steering_matrix_matches_scalar_vectors(project_config, element_positions_m):
+    """Comprueba la ruta vectorizada de steering medido.
+
+    Parametros:
+        project_config: Configuracion base de simulacion.
+        element_positions_m: Posiciones XYZ del array.
+    """
+    measured = replace(
+        project_config,
+        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
+    )
+    az = np.array([0.0, 90.0, 180.0])
+    el = np.array([0.0, 45.0, 90.0])
+
+    matrix = measured_steering_matrix_for_angles(measured, az, el)
+    scalar_vectors = np.vstack([
+        steering_vector(measured, element_positions_m, az_i, el_i)
+        for az_i, el_i in zip(az, el)
+    ])
+
+    assert matrix.shape == (3, measured.array.num_elements)
+    np.testing.assert_allclose(matrix, scalar_vectors)
+    with pytest.raises(ValueError, match="misma longitud"):
+        measured_steering_matrix_for_angles(measured, np.array([0.0, 90.0]), np.array([0.0]))
+
 
 def test_create_geometry_rejects_unsupported(project_config):
     """Comprueba que se rechazan geometria o numero de elementos no soportados.

@@ -168,10 +168,31 @@ def plot_pattern_elevation(
     jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
 
     ax = fig.add_subplot(1, 1, 1, projection="polar")
-    elevation = adaptive_pattern["elevation_deg"].to_numpy()
-    theta = np.deg2rad(90.0 - elevation)
+    if "polar_theta_deg" in adaptive_pattern.columns:
+        theta = np.deg2rad(adaptive_pattern["polar_theta_deg"].to_numpy())
+    else:
+        elevation = adaptive_pattern["elevation_deg"].to_numpy()
+        theta = np.deg2rad(90.0 - elevation)
     radius = _db_to_radius(adaptive_pattern["response_dB_normalized"].to_numpy(), min_display_dB)
-    ax.plot(theta, radius, linewidth=2, label=adaptive_label, color="blue")
+    if "plot_side" in adaptive_pattern.columns:
+        first = True
+        for _, side_data in adaptive_pattern.groupby("plot_side", sort=False):
+            theta_side = np.deg2rad(side_data["polar_theta_deg"].to_numpy())
+            radius_side = _db_to_radius(
+                side_data["response_dB_normalized"].to_numpy(),
+                min_display_dB,
+            )
+
+            ax.plot(
+                theta_side,
+                radius_side,
+                linewidth=2,
+                label=adaptive_label if first else None,
+                color="blue",
+            )
+            first = False
+    else:
+        ax.plot(theta, radius, linewidth=2, label=adaptive_label, color="blue")
 
     if jammer_info:
         for j_idx, item in enumerate(jammer_info):
@@ -188,7 +209,7 @@ def plot_pattern_elevation(
     ax.set_thetamin(-90)
     ax.set_thetamax(90)
     ax.set_xticks(np.deg2rad([-90, -60, -30, 0, 30, 60, 90]))
-    ax.set_xticklabels(["180 deg", "150 deg", "120 deg", "90 deg", "60 deg", "30 deg", "0 deg"])
+    ax.set_xticklabels(["0 deg", "30 deg", "60 deg", "90 deg", "60 deg", "30 deg", "0 deg"])
     ax.set_rlim(0, abs(min_display_dB))
     ax.set_rticks(radial_ticks)
     ax.set_yticklabels([f"{t + min_display_dB:.0f} dB" for t in radial_ticks])
