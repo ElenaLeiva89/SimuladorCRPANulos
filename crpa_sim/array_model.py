@@ -87,6 +87,7 @@ def steering_vector_ideal(
     k_rad_m = 2.0 * np.pi / wavelength_m
     u = direction_unit_vector(azimuth_deg, elevation_deg)
     phase_rad = k_rad_m * (element_positions_m @ u)
+    
     return np.exp(1j * phase_rad)
 
 

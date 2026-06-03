@@ -375,7 +375,6 @@ En `output_dir`:
 config_used.json                Copia exacta de la configuración parseada.
 run_log.txt                     Resumen textual de la ejecución.
 null_metrics_by_jammer.csv      Métricas por Monte Carlo, jammer y umbral.
-null_metrics_summary.csv        Promedios por jammer y umbral.
 pattern_global_azimuth_dB.png   Corte global de azimut, si save_plots=true.
 pattern_global_elevation_dB.png Corte global de elevación, si save_plots=true.
 array_geometry.png              Geometría del array, si save_plots=true.
@@ -415,30 +414,19 @@ Columnas principales:
 - `montecarlo_index`
 - `algorithm`
 - `doa_mode`
-- `num_jammers`
-- `jammer_index`
-- `jammer_name`
 - `jammer_azimuth_deg`
 - `jammer_elevation_deg`
 - `jammer_jnr_dB`
 - `jammer_signal_type`
 - `null_depth_dB`
 - `attenuation_threshold_dB`
-- `null_width_azimuth_deg`
-- `null_width_elevation_deg`
-- `null_area_cells_2d`
-- `null_area_deg2_2d`
-- `null_width_azimuth_2d_deg`
-- `null_width_elevation_2d_deg`
+- `null_area_cells`
+- `null_area_deg2`
+- `null_width_azimuth`
+- `null_width_elevation`
 
-`null_metrics_summary.csv` agrupa por:
-
-- `jammer_name`
-- `attenuation_threshold_dB`
-
-y promedia `null_depth_dB`, `null_width_azimuth_2d_deg` y
-`null_width_elevation_2d_deg`. La tabla completa
-`null_metrics_by_jammer.csv` conserva las anchuras 1D y el area 2D.
+La tabla conserva las metricas 2D alrededor de la direccion del jammer para
+cada umbral configurado.
 
 ## Tests
 
@@ -462,7 +450,7 @@ La suite cubre:
 - covarianza, diagonal loading y pseudoinversa;
 - pesos `power_inversion` y `lcmv`;
 - evaluación de patrones 1D/2D;
-- métricas de profundidad, anchura y área de nulo;
+- métricas de profundidad, anchura y área 2D de nulo;
 - creación de salidas principales;
 - plots con backend `Agg` de Matplotlib.
 

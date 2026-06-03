@@ -34,16 +34,11 @@ def test_run_project_creates_core_artifacts_without_plots(fast_config, tmp_path)
     assert (out / "config_used.json").exists()
     assert (out / "run_log.txt").exists()
     assert (out / "null_metrics_by_jammer.csv").exists()
-    assert (out / "null_metrics_summary.csv").exists()
     assert (out / "output_data" / "matrices_complex.npz").exists()
     assert not list(out.glob("*.png"))
 
     metrics = pd.read_csv(out / "null_metrics_by_jammer.csv", sep=fast_config.output.csv_separator, decimal=fast_config.output.csv_decimal)
-    assert {"montecarlo_index", "algorithm", "doa_mode", "jammer_index", "jammer_signal_type"}.issubset(metrics.columns)
-
-    summary = pd.read_csv(out / "null_metrics_summary.csv", sep=fast_config.output.csv_separator, decimal=fast_config.output.csv_decimal)
-    assert not summary.empty
-    assert {"jammer_name", "attenuation_threshold_dB", "null_depth_dB", "null_width_azimuth_2d_deg", "null_width_elevation_2d_deg"}.issubset(summary.columns)
+    assert {"montecarlo_index", "algorithm", "doa_mode", "jammer_signal_type", "null_width_azimuth", "null_width_elevation"}.issubset(metrics.columns)
 
 
 def test_run_project_resolves_output_dir_template(fast_config, tmp_path):
@@ -69,7 +64,7 @@ def test_run_project_resolves_output_dir_template(fast_config, tmp_path):
     out = tmp_path / f"results_lcmv_fixed_{cfg.array.steering_model}"
     assert out.exists()
     assert (out / "config_used.json").exists()
-    assert (out / "null_metrics_summary.csv").exists()
+    assert (out / "null_metrics_by_jammer.csv").exists()
 
 
 @pytest.mark.parametrize("steering_model", ["ideal", "measured"])
@@ -163,7 +158,6 @@ def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm,
 
     out = Path(cfg.output.output_dir)
     metrics = pd.read_csv(out / "null_metrics_by_jammer.csv", sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
-    summary = pd.read_csv(out / "null_metrics_summary.csv", sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
 
     assert set(metrics["doa_mode"]) == {"variable"}
     assert set(metrics["algorithm"]) == {algorithm}
@@ -172,4 +166,3 @@ def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm,
     assert metrics["jammer_azimuth_deg"].between(0.0, 90.0).all()
     assert metrics["jammer_elevation_deg"].between(15.0, 75.0).all()
     assert metrics.groupby("montecarlo_index")["jammer_azimuth_deg"].first().nunique() > 1
-    assert not summary.empty

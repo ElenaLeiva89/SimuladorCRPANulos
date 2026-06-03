@@ -33,7 +33,7 @@ from crpa_sim.io_utils import (
     save_run_log,
 )
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
-from crpa_sim.null_metrics import compute_null_metrics_for_jammers, summarize_null_metrics
+from crpa_sim.null_metrics import compute_null_metrics_for_jammers
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
@@ -326,11 +326,10 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
         )
 
     metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
-    metrics_summary = summarize_null_metrics(metrics_full) if not metrics_full.empty else pd.DataFrame()
 
     if config.output.save_csv and not metrics_full.empty:
-        save_dataframe(metrics_full, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
-    save_dataframe(metrics_summary, output_dir / "null_metrics_summary.csv", config.output.csv_separator, config.output.csv_decimal)
+        metrics_to_save = metrics_full.copy().fillna("N/A")
+        save_dataframe(metrics_to_save, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
 
     save_run_log(config, output_dir, summary_rows)
     print_generated_files(output_dir)

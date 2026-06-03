@@ -1,11 +1,10 @@
 from dataclasses import replace
 import numpy as np
-import pandas as pd
 import pytest
 from crpa_sim.array_model import steering_vector
 from crpa_sim.beamformers import compute_lcmv_weights, compute_power_inversion_weights, compute_weights
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
-from crpa_sim.null_metrics import circular_azimuth_width_deg, compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_region_2d, measure_null_width_1d, summarize_null_metrics
+from crpa_sim.null_metrics import circular_azimuth_width_deg, compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_region_2d
 from crpa_sim.patterns import make_scan_vectors
 
 
@@ -60,15 +59,13 @@ def test_compute_weights_selector(project_config, power_inversion_config, elemen
         compute_weights(bad, X, element_positions_m, jammers)
 
 def test_null_metrics(project_config, element_positions_m, rng):
-    """Verifica profundidad, anchura y resumen de metricas de nulos.
+    """Verifica profundidad y region 2D de metricas de nulos.
 
     Parametros:
         project_config: Configuracion base de simulacion.
         element_positions_m: Posiciones XYZ del array.
         rng: Generador aleatorio determinista.
     """
-    assert measure_null_width_1d(np.array([-2,-1,0,1,2]), np.array([0,-20,-30,-20,0]), 0, -10) == pytest.approx(4.0)
-    assert measure_null_width_1d(np.array([-1,0,1]), np.array([0,-5,0]), 0, -10) is None
     cfg = _ideal_config(project_config)
     jammers = build_jammer_case(cfg, rng)
     X, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
@@ -83,16 +80,12 @@ def test_null_metrics(project_config, element_positions_m, rng):
         "montecarlo_index",
         "algorithm",
         "doa_mode",
-        "num_jammers",
-        "jammer_index",
         "jammer_signal_type",
-        "null_area_cells_2d",
-        "null_area_deg2_2d",
-        "null_width_azimuth_2d_deg",
-        "null_width_elevation_2d_deg",
+        "null_area_cells",
+        "null_area_deg2",
+        "null_width_azimuth",
+        "null_width_elevation",
     }.issubset(metrics.columns)
-    summary = summarize_null_metrics(metrics)
-    assert not summary.empty
 
 
 def test_lcmv_rejects_more_jammers_than_constraints(project_config, element_positions_m, rng):
@@ -110,18 +103,16 @@ def test_lcmv_rejects_more_jammers_than_constraints(project_config, element_posi
         compute_lcmv_weights(project_config, X, element_positions_m, too_many)
 
 
-def test_null_width_edge_cases_and_floor(project_config, element_positions_m):
-    """Cubre nulos en bordes, umbrales exactos y suelo de profundidad.
+def test_null_depth_zero_gain_returns_negative_infinity(project_config, element_positions_m):
+    """Cubre el caso de ganancia nula en la direccion del jammer.
 
     Parametros:
         project_config: Configuracion base de simulacion.
         element_positions_m: Posiciones XYZ del array.
     """
-    assert measure_null_width_1d(np.array([0, 1, 2]), np.array([-20, -20, 0]), 0, -20) == pytest.approx(2.0)
-    assert measure_null_width_1d(np.array([0, 1, 2]), np.array([0, -20, -20]), 2, -20) == pytest.approx(2.0)
     zero_weights = np.zeros(project_config.array.num_elements, dtype=complex)
     jammer = build_jammer_case(project_config, np.random.default_rng(1))[0]
-    assert compute_null_depth_dB(project_config, element_positions_m, zero_weights, jammer, floor_dB=-80.0) == pytest.approx(-80.0)
+    assert np.isneginf(compute_null_depth_dB(project_config, element_positions_m, zero_weights, jammer))
 
 
 def test_null_region_2d_edge_cases_and_azimuth_wrap():
@@ -153,7 +144,7 @@ def test_null_region_2d_edge_cases_and_azimuth_wrap():
     assert region["null_area_cells_2d"] == 4
     assert region["null_area_deg2_2d"] == pytest.approx(4.0)
     assert region["null_width_azimuth_2d_deg"] == pytest.approx(2.0)
-    assert region["null_width_elevation_2d_deg"] == pytest.approx(0.0)
+    assert region["null_width_elevation_2d_deg"] == pytest.approx(1.0)
 
     empty_region = measure_null_region_2d(
         az_grid,
@@ -170,66 +161,3 @@ def test_null_region_2d_edge_cases_and_azimuth_wrap():
         "null_width_elevation_2d_deg": None,
     }
 
-
-def test_null_metrics_empty_inputs():
-    """Comprueba que el resumen tolera tablas vacias con columnas esperadas.
-
-    Parametros:
-        No recibe parametros.
-    """
-    metrics = pd.DataFrame(
-        columns=[
-            "jammer_name",
-            "attenuation_threshold_dB",
-            "null_depth_dB",
-            "null_width_azimuth_2d_deg",
-            "null_width_elevation_2d_deg",
-        ]
-    )
-    summary = summarize_null_metrics(metrics)
-    assert list(summary.columns) == list(metrics.columns)
-    assert summary.empty
-
-
-def test_null_metrics_summary_rounds_configured_decimal_columns():
-    """Comprueba que el resumen expone metricas con dos decimales.
-
-    Parametros:
-        No recibe parametros.
-    """
-    metrics = pd.DataFrame(
-        [
-            {
-                "jammer_name": "J1",
-                "attenuation_threshold_dB": -20.0,
-                "null_depth_dB": -33.333,
-                "null_width_azimuth_deg": 1.111,
-                "null_width_elevation_deg": 2.222,
-                "null_area_cells_2d": 3,
-                "null_area_deg2_2d": 4.444,
-                "null_width_azimuth_2d_deg": 5.555,
-                "null_width_elevation_2d_deg": 6.666,
-            },
-            {
-                "jammer_name": "J1",
-                "attenuation_threshold_dB": -20.0,
-                "null_depth_dB": -33.336,
-                "null_width_azimuth_deg": 1.116,
-                "null_width_elevation_deg": 2.226,
-                "null_area_cells_2d": 5,
-                "null_area_deg2_2d": 4.446,
-                "null_width_azimuth_2d_deg": 5.556,
-                "null_width_elevation_2d_deg": 6.667,
-            },
-        ]
-    )
-
-    summary = summarize_null_metrics(metrics)
-
-    rounded_columns = [
-        "null_depth_dB",
-        "null_width_azimuth_2d_deg",
-        "null_width_elevation_2d_deg",
-    ]
-    for column in rounded_columns:
-        assert summary.loc[0, column] == pytest.approx(round(summary.loc[0, column], 2))

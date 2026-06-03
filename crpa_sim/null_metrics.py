@@ -2,9 +2,7 @@
 
 Las funciones de este modulo no calculan pesos: reciben un vector de pesos ya
 estimado y miden como responde el patron en la direccion de cada jammer. Se
-exportan dos niveles de informacion:
-- filas por jammer/umbral/Monte Carlo;
-- resumen medio por jammer y umbral.
+exporta una fila por jammer, umbral y Monte Carlo.
 """
 
 from __future__ import annotations
@@ -25,7 +23,6 @@ def compute_null_depth_dB(
     weights: np.ndarray,
     jammer: JammerInstance,
     reference_gain_abs: float = 1.0,
-    floor_dB: float = -120.0,
 ) -> float:
     """Calcula la profundidad del nulo en la direccion exacta del jammer.
 
@@ -35,41 +32,21 @@ def compute_null_depth_dB(
         weights: Vector complejo de pesos del beamformer.
         jammer: Jammer cuya direccion se evalua.
         reference_gain_abs: Ganancia absoluta de referencia para convertir a dB.
-        floor_dB: Suelo minimo reportado para evitar valores numericos extremos.
     """
     a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
+
     gain_abs = abs(np.vdot(weights, a_j))
-    depth = 20.0 * np.log10(gain_abs / (reference_gain_abs + 1e-15) + 1e-12)
-    return float(max(depth, floor_dB))
+    reference = abs(reference_gain_abs)
 
+    if reference == 0.0:
+        raise ValueError("reference_gain_abs no puede ser 0.")
 
-def measure_null_width_1d(angle_grid_deg: np.ndarray, response_dB: np.ndarray, jammer_angle_deg: float, threshold_dB: float) -> float | None:
-    """Mide la anchura contigua del nulo alrededor del angulo del jammer.
+    if gain_abs == 0.0:
+        return float("-inf")
 
-    Parametros:
-        angle_grid_deg: Vector angular del corte, en grados.
-        response_dB: Respuesta normalizada del corte, en dB.
-        jammer_angle_deg: Angulo del jammer dentro del eje del corte.
-        threshold_dB: Umbral de atenuacion usado para delimitar el nulo.
-    """
-    angle_grid_deg = np.asarray(angle_grid_deg, dtype=float)
-    response_dB = np.asarray(response_dB, dtype=float)
-    delta = ((angle_grid_deg - jammer_angle_deg + 180.0) % 360.0) - 180.0
-    idx = int(np.argmin(np.abs(delta)))
+    depth = 20.0 * np.log10(gain_abs / reference)
 
-    if response_dB[idx] > threshold_dB:
-        return None
-
-    left = idx
-    while left > 0 and response_dB[left] <= threshold_dB:
-        left -= 1
-
-    right = idx
-    while right < len(response_dB) - 1 and response_dB[right] <= threshold_dB:
-        right += 1
-
-    return float(abs(angle_grid_deg[right] - angle_grid_deg[left]))
-
+    return float(depth)
 
 def compute_null_metrics_for_jammers(
     config: ProjectConfig,
@@ -104,7 +81,7 @@ def compute_null_metrics_for_jammers(
 
     response_2d_dB = grid_2d["response_power_dB"]
 
-    for jammer_index, jammer in enumerate(jammer_list, start=1):
+    for jammer in jammer_list:
         az_cut = compute_azimuth_response_cut(
             config,
             element_positions_m,
@@ -120,26 +97,12 @@ def compute_null_metrics_for_jammers(
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
 
-        cut_prefix = f"{jammer.name}"
-        cuts[f"{cut_prefix}_azimuth_cut"] = az_cut
-        cuts[f"{cut_prefix}_elevation_cut"] = el_cut
+        cuts[f"{jammer.name}_azimuth_cut"] = az_cut
+        cuts[f"{jammer.name}_elevation_cut"] = el_cut
 
         null_depth = compute_null_depth_dB(config, element_positions_m, weights, jammer, reference_gain_abs=1.0)
-        jammer_azimuth_for_width_deg = jammer.azimuth_deg % 360.0
 
         for threshold in config.scan.null_thresholds_dB:
-            width_az = measure_null_width_1d(
-                az_cut["azimuth_deg"].to_numpy(),
-                az_cut["response_dB_normalized"].to_numpy(),
-                jammer_azimuth_for_width_deg,
-                threshold,
-            )
-            width_el = measure_null_width_1d(
-                el_cut["elevation_deg"].to_numpy(),
-                el_cut["response_dB_normalized"].to_numpy(),
-                jammer.elevation_deg,
-                threshold,
-            )
             region_2d = measure_null_region_2d(
                 grid_2d["azimuth_deg"],
                 grid_2d["elevation_deg"],
@@ -153,61 +116,20 @@ def compute_null_metrics_for_jammers(
                     "montecarlo_index": montecarlo_index,
                     "algorithm": config.beamforming.algorithm,
                     "doa_mode": config.simulation.doa_mode,
-                    "num_jammers": len(jammer_list),
-                    "jammer_index": jammer_index,
-                    "jammer_name": jammer.name,
                     "jammer_azimuth_deg": jammer.azimuth_deg,
                     "jammer_elevation_deg": jammer.elevation_deg,
                     "jammer_jnr_dB": jammer.jnr_dB,
                     "jammer_signal_type": jammer.signal_type,
                     "null_depth_dB": null_depth,
                     "attenuation_threshold_dB": threshold,
-                    "null_width_azimuth_deg": width_az,
-                    "null_width_elevation_deg": width_el,
-                    "null_area_cells_2d": region_2d["null_area_cells_2d"],
-                    "null_area_deg2_2d": region_2d["null_area_deg2_2d"],
-                    "null_width_azimuth_2d_deg": region_2d["null_width_azimuth_2d_deg"],
-                    "null_width_elevation_2d_deg": region_2d["null_width_elevation_2d_deg"],
+                    "null_area_cells": region_2d["null_area_cells_2d"],
+                    "null_area_deg2": region_2d["null_area_deg2_2d"],
+                    "null_width_azimuth": region_2d["null_width_azimuth_2d_deg"],
+                    "null_width_elevation": region_2d["null_width_elevation_2d_deg"],
                 }
             )
 
     return pd.DataFrame(rows), cuts
-
-
-def summarize_null_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
-    """Agrupa metricas Monte Carlo por jammer y umbral de atenuacion.
-
-    El resumen conserva solo las metricas principales: profundidad del nulo y
-    anchuras 2D. La tabla completa por jammer mantiene las anchuras 1D y area.
-
-    Parametros:
-        metrics: Tabla devuelta por compute_null_metrics_for_jammers,
-            concatenada para una o varias iteraciones Monte Carlo.
-    """
-    group_cols = [
-        "jammer_name",
-        "attenuation_threshold_dB",
-    ]
-
-    numeric_cols = [
-        "null_depth_dB",
-        "null_width_azimuth_2d_deg",
-        "null_width_elevation_2d_deg",
-    ]
-
-    metrics = metrics.copy()
-
-    for col in numeric_cols:
-        metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
-
-    summary = (
-        metrics
-        .groupby(group_cols, dropna=False)[numeric_cols]
-        .mean()
-        .reset_index()
-    )
-
-    return summary.round(2)
 
 
 def wrap_angle_180(angle_deg: float) -> float:
@@ -331,9 +253,18 @@ def measure_null_region_2d(
     area_cells = len(region)
     area_deg2 = area_cells * az_step * el_step
 
+    width_az = circular_azimuth_width_deg(az_vals)
+    width_el = float(np.max(el_vals) - np.min(el_vals))
+
+    if width_az == 0.0:
+        width_az = az_step
+
+    if width_el == 0.0:
+        width_el = el_step
+
     return {
         "null_area_cells_2d": area_cells,
         "null_area_deg2_2d": area_deg2,
-        "null_width_azimuth_2d_deg": circular_azimuth_width_deg(az_vals),
-        "null_width_elevation_2d_deg": float(np.max(el_vals) - np.min(el_vals)),
+        "null_width_azimuth_2d_deg": width_az,
+        "null_width_elevation_2d_deg": width_el,
     }

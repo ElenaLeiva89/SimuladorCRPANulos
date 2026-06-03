@@ -130,20 +130,12 @@ def test_main_run_project_light(config_json_path):
         "montecarlo_index",
         "algorithm",
         "doa_mode",
-        "jammer_index",
         "jammer_signal_type",
+        "null_area_cells",
+        "null_area_deg2",
+        "null_width_azimuth",
+        "null_width_elevation",
     }.issubset(metrics.columns)
-    summary_path = out / "null_metrics_summary.csv"
-    assert summary_path.exists()
-    summary = pd.read_csv(summary_path, sep=cfg.output.csv_separator, decimal=cfg.output.csv_decimal)
-    assert list(summary.columns) == [
-        "jammer_name",
-        "attenuation_threshold_dB",
-        "null_depth_dB",
-        "null_width_azimuth_2d_deg",
-        "null_width_elevation_2d_deg",
-    ]
-    assert len(summary) == len(cfg.jammer.base_jammers[: cfg.jammer.num_jammers]) * len(cfg.scan.null_thresholds_dB)
     assert (out / "output_data" / "element_positions_m.csv").exists()
     assert (out / "output_data" / "jammer_table.csv").exists()
     assert (out / "output_data" / "matrices_complex.npz").exists()

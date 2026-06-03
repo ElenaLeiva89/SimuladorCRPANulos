@@ -75,8 +75,18 @@ def evaluate_response_for_angles(
     )
 
     response_abs = np.abs(values)
-    response_abs_norm = response_abs / (np.max(response_abs) + 1e-15) if normalize else response_abs
-    response_dB_norm = 20.0 * np.log10(response_abs_norm + 1e-12)
+    if normalize:
+        max_abs = np.max(response_abs)
+
+        if max_abs == 0.0:
+            response_abs_norm = np.zeros_like(response_abs)
+        else:
+            response_abs_norm = response_abs / max_abs
+    else:
+        response_abs_norm = response_abs
+
+    with np.errstate(divide="ignore"):
+        response_dB_norm = 20.0 * np.log10(response_abs_norm)
 
     return pd.DataFrame(
         {
@@ -150,7 +160,8 @@ def compute_2d_response_grid(
 
     response_abs = np.abs(response_complex).reshape(az_grid.shape)
     response_power = response_abs**2
-    response_power_dB = 10.0 * np.log10(response_power + 1e-12)
+    with np.errstate(divide="ignore"):
+        response_power_dB = 10.0 * np.log10(response_power)
 
     return {
         "azimuth_deg": az_grid,
@@ -228,9 +239,12 @@ def compute_elevation_response_cut_for_plot(
     cut = pd.concat([left, right], ignore_index=True)
     max_abs = cut["response_abs"].max()
 
-    cut["response_abs_normalized"] = cut["response_abs"] / (max_abs + 1e-15)
-    cut["response_dB_normalized"] = 20.0 * np.log10(
-        cut["response_abs_normalized"] + 1e-12
-    )
+    if max_abs == 0.0:
+        cut["response_abs_normalized"] = 0.0
+    else:
+        cut["response_abs_normalized"] = cut["response_abs"] / max_abs
+        
+    with np.errstate(divide="ignore"):
+        cut["response_dB_normalized"] = 20.0 * np.log10(cut["response_abs_normalized"])
 
     return cut

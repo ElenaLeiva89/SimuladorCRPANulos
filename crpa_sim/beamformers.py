@@ -37,7 +37,13 @@ def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.n
     c[ref_idx] = 1.0 + 0.0j
     numerator = R_inv @ c
     denominator = np.vdot(c, numerator)
-    return numerator / (denominator + 1e-15)
+
+    if denominator == 0.0:
+        raise ZeroDivisionError(
+            "Power Inversion: denominator es cero. No se pueden calcular los pesos."
+        )
+
+    return numerator / denominator
 
 
 def compute_lcmv_weights(

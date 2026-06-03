@@ -28,10 +28,22 @@ def temporal_fft_snapshot_matrix(snapshot_matrix: np.ndarray, sample_rate_hz: fl
         raise ValueError("sample_rate_hz debe ser > 0.")
     num_snapshots = snapshot_matrix.shape[1]
     n_fft = num_snapshots if fft_size is None else int(fft_size)
+
     if n_fft <= 0:
         raise ValueError("fft_size debe ser > 0.")
+    
     spectrum = np.fft.fftshift(np.fft.fft(snapshot_matrix, n=n_fft, axis=1), axes=1)
     power = np.mean(np.abs(spectrum) ** 2, axis=0)
-    power_dB = 10.0 * np.log10(power / (np.max(power) + 1e-15) + 1e-12)
+    max_power = np.max(power)
+
+    if max_power == 0.0:
+        power_normalized = np.zeros_like(power)
+    else:
+        power_normalized = power / max_power
+
+    with np.errstate(divide="ignore"):
+        power_dB = 10.0 * np.log10(power_normalized)
+
     freq_hz = np.fft.fftshift(np.fft.fftfreq(n_fft, d=1.0 / sample_rate_hz))
+    
     return pd.DataFrame({"frequency_hz": freq_hz, "power_dB_normalized": power_dB})

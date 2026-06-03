@@ -48,15 +48,15 @@
       {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
       {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11, "chirp_frequency":60000000},
       {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00, "chirp_frequency":60000000},
-      {"name": "Jammer_4", "azimuth_deg": 270.0, "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.17, "chirp_frequency":60000000},
+      {"name": "Jammer_4", "azimuth_deg": 270.0, "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.17, "chirp_frequency":60000000},
       {"name": "Jammer_5", "azimuth_deg": 140.0, "elevation_deg": 50.0, "signal_type": "tone", "normalized_frequency": 0.30, "chirp_frequency":60000000},
       {"name": "Jammer_6", "azimuth_deg": 210.0,"elevation_deg": 60.0, "signal_type": "tone", "normalized_frequency": 0.23, "chirp_frequency":60000000}
     ]
   },
   "output_config": {
     "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}",
-    "save_csv": false,
-    "save_npz": false,
+    "save_csv": true,
+    "save_npz": true,
     "save_plots": true,
     "csv_separator": ";",
     "csv_decimal": ","

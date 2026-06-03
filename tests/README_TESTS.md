@@ -6,7 +6,7 @@ La suite está adaptada a la versión actual del proyecto:
 - `beamforming_config.algorithm`: valor único por ejecución (`lcmv` o `power_inversion`).
 - `jammer_config.num_jammers` y `jammer_config.jnr_dB`: valores únicos.
 - `compute_weights(config, snapshot_matrix, element_positions_m, jammer_list)`.
-- Métricas por jammer exportadas con contexto de Monte Carlo, algoritmo, modo DoA y tipo de jammer.
+- Métricas por jammer exportadas con contexto de Monte Carlo, algoritmo, modo DoA, tipo de jammer y region 2D de nulo.
 
 ## Instalación
 
@@ -28,7 +28,7 @@ Los tests cubren:
 - cálculo de pesos `power_inversion` y `lcmv`;
 - sensibilidad de nulos ante error DoA, calibración y acoplo simulado;
 - cortes de patrón, malla 2D y FFT temporal;
-- métricas de profundidad, anchura 1D y región 2D;
+- métricas de profundidad y región 2D;
 - escritura de CSV, NPZ, logs y plots con Matplotlib en backend `Agg`;
 - integración ligera de `run_project`.
 - ejecución end-to-end con `doa_mode = variable` para `lcmv` y `power_inversion`.
