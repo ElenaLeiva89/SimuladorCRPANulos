@@ -11,39 +11,46 @@ import numpy as np
 import pandas as pd
 
 
-def temporal_fft_snapshot_matrix(snapshot_matrix: np.ndarray, sample_rate_hz: float, fft_size: int | None = None) -> pd.DataFrame:
-    """Calcula el espectro temporal medio de todos los canales de antena.
+def temporal_psd_snapshot_matrix(
+    snapshot_matrix: np.ndarray,
+    sample_rate_hz: float,
+    fft_size: int | None = None,
+) -> pd.DataFrame:
+    """Calcula la PSD temporal media de los snapshots recibidos.
+
+    La FFT se calcula por elemento de antena y despues se promedia la potencia
+    entre canales:
+
+        PSD = mean(|FFT(X)|^2) / (Fs * NFFT)
 
     Parametros:
-        snapshot_matrix: Matriz compleja con forma
+        snapshot_matrix: Matriz compleja X con forma
             (num_elements, num_snapshots).
-        sample_rate_hz: Frecuencia de muestreo usada para construir el eje
-            de frecuencias en Hz.
-        fft_size: Tamano opcional de FFT. Si es None, se usa el numero de
-            snapshots disponible.
+        sample_rate_hz: Frecuencia de muestreo en Hz.
+        fft_size: Tamano de FFT. Si es None, usa num_snapshots.
     """
     if snapshot_matrix.ndim != 2:
         raise ValueError("snapshot_matrix debe tener forma (num_elements, num_snapshots).")
     if sample_rate_hz <= 0:
-        raise ValueError("sample_rate_hz debe ser > 0.")
+        raise ValueError("sample_rate_hz debe ser mayor que cero.")
+
     num_snapshots = snapshot_matrix.shape[1]
+    if num_snapshots <= 0:
+        raise ValueError("num_snapshots debe ser mayor que cero.")
+
     n_fft = num_snapshots if fft_size is None else int(fft_size)
-
     if n_fft <= 0:
-        raise ValueError("fft_size debe ser > 0.")
-    
-    spectrum = np.fft.fftshift(np.fft.fft(snapshot_matrix, n=n_fft, axis=1), axes=1)
-    power = np.mean(np.abs(spectrum) ** 2, axis=0)
-    max_power = np.max(power)
+        raise ValueError("fft_size debe ser mayor que cero.")
 
-    if max_power == 0.0:
-        power_normalized = np.zeros_like(power)
-    else:
-        power_normalized = power / max_power
+    spectrum = np.fft.fftshift(
+        np.fft.fft(snapshot_matrix, n=n_fft, axis=1),
+        axes=1,
+    )
+    psd = np.mean(np.abs(spectrum) ** 2, axis=0) / (sample_rate_hz * n_fft)
 
     with np.errstate(divide="ignore"):
-        power_dB = 10.0 * np.log10(power_normalized)
+        psd_dB_Hz = 10.0 * np.log10(psd)
 
     freq_hz = np.fft.fftshift(np.fft.fftfreq(n_fft, d=1.0 / sample_rate_hz))
-    
-    return pd.DataFrame({"frequency_hz": freq_hz, "power_dB_normalized": power_dB})
+
+    return pd.DataFrame({"frequency_hz": freq_hz, "psd_dB_Hz": psd_dB_Hz})

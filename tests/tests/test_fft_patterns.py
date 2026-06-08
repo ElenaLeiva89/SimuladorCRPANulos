@@ -2,35 +2,37 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from crpa_sim.fft_tools import temporal_fft_snapshot_matrix
+from crpa_sim.fft_tools import temporal_psd_snapshot_matrix
 from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, conventional_weights, evaluate_response_for_angles, make_scan_vectors
 
 
 MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
 
 
-def test_fft_size_and_tone_detection(rng):
-    """Verifica tamano de FFT y localizacion de un tono sintetico.
+def test_psd_size_and_tone_detection(rng):
+    """Verifica tamano de PSD y localizacion de un tono sintetico.
 
     Parametros:
         rng: Generador aleatorio determinista.
     """
     X = rng.standard_normal((7, 128)) + 1j * rng.standard_normal((7, 128))
-    df = temporal_fft_snapshot_matrix(X, 1024.0, 512)
+    df = temporal_psd_snapshot_matrix(X, 1024.0, 512)
     assert len(df) == 512
-    assert df["power_dB_normalized"].max() <= 1e-9
+    assert {"frequency_hz", "psd_dB_Hz"}.issubset(df.columns)
+    assert np.isfinite(df["frequency_hz"]).all()
     n = np.arange(512)
     tone = np.exp(1j * 2*np.pi*128/1024*n)
-    tone_df = temporal_fft_snapshot_matrix(np.tile(tone, (7,1)), 1024.0, 512)
-    assert abs(tone_df.loc[tone_df["power_dB_normalized"].idxmax(), "frequency_hz"] - 128.0) <= 2.0
-    default_df = temporal_fft_snapshot_matrix(X, 1024.0)
+    tone_df = temporal_psd_snapshot_matrix(np.tile(tone, (7,1)), 1024.0, 512)
+    assert abs(tone_df.loc[tone_df["psd_dB_Hz"].idxmax(), "frequency_hz"] - 128.0) <= 2.0
+    assert tone_df["psd_dB_Hz"].max() > tone_df["psd_dB_Hz"].median()
+    default_df = temporal_psd_snapshot_matrix(X, 1024.0)
     assert len(default_df) == X.shape[1]
     with pytest.raises(ValueError):
-        temporal_fft_snapshot_matrix(X, 1024.0, 0)
+        temporal_psd_snapshot_matrix(X, 1024.0, 0)
     with pytest.raises(ValueError):
-        temporal_fft_snapshot_matrix(X[0], 1024.0)
+        temporal_psd_snapshot_matrix(X[0], 1024.0)
     with pytest.raises(ValueError):
-        temporal_fft_snapshot_matrix(X, 0.0)
+        temporal_psd_snapshot_matrix(X, 0.0)
 
 def test_patterns(project_config, element_positions_m):
     """Comprueba cortes, malla 2D y vectores de barrido de patrones.

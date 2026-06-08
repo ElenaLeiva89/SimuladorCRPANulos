@@ -60,7 +60,7 @@ crpa_sim/
   beamformers.py                Pesos Power Inversion y LCMV.
   config.py                     Dataclasses y normalización del JSON.
   covariance.py                 Covarianza, diagonal loading e inversión.
-  fft_tools.py                  FFT temporal media de snapshots.
+  fft_tools.py                  PSD temporal media de snapshots.
   io_utils.py                   Carga, validación y guardado de artefactos.
   jammers.py                    Ruido, señales jammer y matriz recibida.
   null_metrics.py               Profundidad, anchura y área de nulos.
@@ -380,7 +380,7 @@ pattern_global_elevation_dB.png Corte global de elevación, si save_plots=true.
 array_geometry.png              Geometría del array, si save_plots=true.
 array_factor_heatmap.png        Mapa 2D azimut/elevación, si save_plots=true.
 pattern_3d_comparison.png       Superficie 3D del patrón, si save_plots=true.
-temporal_fft_snapshot_spectrum.png Espectro medio, si save_plots=true.
+temporal_psd_spectrum.png       PSD temporal media, si save_plots=true.
 jammer_plots/                   Cortes individuales por jammer.
 ```
 
@@ -390,7 +390,6 @@ En `output_dir/output_data`, si corresponde:
 element_positions_m.csv         Posiciones XYZ de los elementos.
 jammer_table.csv                Jammers generados en la primera iteración.
 matrices_complex.npz            Snapshots, covarianza y pesos complejos.
-temporal_fft_snapshot_spectrum.csv Espectro temporal medio.
 jammer_cuts/                    Cortes azimut/elevación por jammer.
 ```
 

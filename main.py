@@ -22,7 +22,7 @@ from crpa_sim.array_model import create_crpa_geometry
 from crpa_sim.beamformers import compute_weights
 from crpa_sim.config import JammerInstance, ProjectConfig
 from crpa_sim.covariance import compute_sample_covariance
-from crpa_sim.fft_tools import temporal_fft_snapshot_matrix
+from crpa_sim.fft_tools import temporal_psd_snapshot_matrix
 from crpa_sim.io_utils import (
     ensure_output_dir,
     load_project_config,
@@ -47,8 +47,9 @@ from crpa_sim.plots import (
     plot_heatmap,
     plot_pattern_azimuth,
     plot_pattern_elevation,
-    plot_temporal_spectrum,
+    plot_temporal_psd_spectrum,
 )
+
 
 def _case_rng(base_seed: int, montecarlo_index: int) -> np.random.Generator:
     """Crea un generador reproducible para una iteracion Monte Carlo.
@@ -93,7 +94,12 @@ def _save_global_outputs(
 
     if config.output.save_csv:
         output_dir_data.mkdir(parents=True, exist_ok=True)
-        save_dataframe(pd.DataFrame(element_positions_m, columns=["x_m", "y_m", "z_m"]), output_dir_data / "element_positions_m.csv", sep, dec)
+        save_dataframe(
+            pd.DataFrame(element_positions_m, columns=["x_m", "y_m", "z_m"]),
+            output_dir_data / "element_positions_m.csv",
+            sep,
+            dec,
+        )
         save_dataframe(jammer_table, output_dir_data / "jammer_table.csv", sep, dec)
 
     if config.output.save_npz:
@@ -124,14 +130,16 @@ def _save_global_outputs(
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
 
-        jammer_az = ([(row["name"], row["azimuth_deg"], int(row["jammer_index"]) - 1) 
-                for _, row in jammer_table.iterrows()]
-                    if not jammer_table.empty
-                    else [])
-        jammer_el = ([(row["name"], row["elevation_deg"], int(row["jammer_index"]) - 1)
-                for _, row in jammer_table.iterrows()]
-                    if not jammer_table.empty
-                    else [])
+        jammer_az = (
+            [(row["name"], row["azimuth_deg"], int(row["jammer_index"]) - 1) for _, row in jammer_table.iterrows()]
+            if not jammer_table.empty
+            else []
+        )
+        jammer_el = (
+            [(row["name"], row["elevation_deg"], int(row["jammer_index"]) - 1) for _, row in jammer_table.iterrows()]
+            if not jammer_table.empty
+            else []
+        )
         title = f"Patron de radiacion de CRPA 7 elementos \ny direcciones de jammers - {config.signal.band_label}"
 
         plot_pattern_azimuth(
@@ -150,11 +158,16 @@ def _save_global_outputs(
             adaptive_label=config.beamforming.algorithm,
             fixed_azimuth_deg=config.beamforming.desired_azimuth_deg,
         )
-
-        spectrum = temporal_fft_snapshot_matrix(snapshot_matrix, config.signal.sample_rate_hz, config.signal.fft_size)
-        plot_temporal_spectrum(spectrum, output_dir / "temporal_fft_snapshot_spectrum.png", "FFT temporal media de snapshots")
-        if config.output.save_csv:
-            save_dataframe(spectrum, output_dir_data / "temporal_fft_snapshot_spectrum.csv", sep, dec)
+        psd_spectrum = temporal_psd_snapshot_matrix(
+            snapshot_matrix,
+            config.signal.sample_rate_hz,
+            config.signal.fft_size,
+        )
+        plot_temporal_psd_spectrum(
+            psd_spectrum,
+            output_dir / "temporal_psd_spectrum.png",
+            "PSD temporal media de snapshots",
+        )
 
 
 def _save_jammer_plots(
@@ -190,8 +203,20 @@ def _save_jammer_plots(
         jam_dir = jammer_plots_dir
         jam_dir.mkdir(parents=True, exist_ok=True)
 
-        radiation_az = compute_azimuth_response_cut(config, element_positions_m, selected_weights, azimuth_scan_deg, jammer.elevation_deg)
-        radiation_el = compute_elevation_response_cut_for_plot(config, element_positions_m, selected_weights, elevation_scan_deg, jammer.azimuth_deg)
+        radiation_az = compute_azimuth_response_cut(
+            config,
+            element_positions_m,
+            selected_weights,
+            azimuth_scan_deg,
+            jammer.elevation_deg,
+        )
+        radiation_el = compute_elevation_response_cut_for_plot(
+            config,
+            element_positions_m,
+            selected_weights,
+            elevation_scan_deg,
+            jammer.azimuth_deg,
+        )
 
         title_base = f"{tag} - az={jammer.azimuth_deg:.1f} deg, el={jammer.elevation_deg:.1f} deg - {config.beamforming.algorithm}"
         plot_pattern_azimuth(
@@ -270,9 +295,27 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
     for mc in range(1, config.simulation.num_montecarlo + 1):
         rng = _case_rng(config.simulation.random_seed, mc)
         jammer_list = build_jammer_case(config, rng)
-        snapshot_matrix, jammer_table = generate_received_snapshot_matrix(config, element_positions_m, jammer_list, rng)
+        snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
+            config,
+            element_positions_m,
+            jammer_list,
+            rng,
+        )
         covariance_matrix = compute_sample_covariance(snapshot_matrix)
         selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list)
+
+        # Comprobacion diagnostica del JNR realmente generado.
+        # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
+        p_noise = np.mean(np.abs(noise_matrix) ** 2)
+        p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
+        jnr_measured_dB = 10.0 * np.log10(p_jammer / p_noise)
+        print()
+        print("========== VALIDACION JNR ==========")
+        print(f"Potencia ruido  : {10*np.log10(p_noise):.2f} dB")
+        print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
+        print(f"JNR medido      : {jnr_measured_dB:.2f} dB")
+        print("====================================")
+        print()
 
         metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
             config=config,

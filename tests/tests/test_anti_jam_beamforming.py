@@ -16,7 +16,7 @@ from crpa_sim.patterns import conventional_weights, make_scan_vectors
 def _make_case(config, rng):
     positions = create_crpa_geometry(config.array, config.element_spacing_m)
     jammers = build_jammer_case(config, rng)
-    X, table = generate_received_snapshot_matrix(config, positions, jammers, rng)
+    X, table, _, _ = generate_received_snapshot_matrix(config, positions, jammers, rng)
     return positions, jammers, X, table
 
 

@@ -168,12 +168,6 @@ def plot_pattern_elevation(
     jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
 
     ax = fig.add_subplot(1, 1, 1, projection="polar")
-    if "polar_theta_deg" in adaptive_pattern.columns:
-        theta = np.deg2rad(adaptive_pattern["polar_theta_deg"].to_numpy())
-    else:
-        elevation = adaptive_pattern["elevation_deg"].to_numpy()
-        theta = np.deg2rad(90.0 - elevation)
-    radius = _db_to_radius(adaptive_pattern["response_dB_normalized"].to_numpy(), min_display_dB)
     if "plot_side" in adaptive_pattern.columns:
         first = True
         for _, side_data in adaptive_pattern.groupby("plot_side", sort=False):
@@ -192,6 +186,12 @@ def plot_pattern_elevation(
             )
             first = False
     else:
+        if "polar_theta_deg" in adaptive_pattern.columns:
+            theta = np.deg2rad(adaptive_pattern["polar_theta_deg"].to_numpy())
+        else:
+            elevation = adaptive_pattern["elevation_deg"].to_numpy()
+            theta = np.deg2rad(90.0 - elevation)
+        radius = _db_to_radius(adaptive_pattern["response_dB_normalized"].to_numpy(), min_display_dB)
         ax.plot(theta, radius, linewidth=2, label=adaptive_label, color="blue")
 
     if jammer_info:
@@ -373,21 +373,34 @@ def plot_3d(
     plt.close(fig)
 
 
-def plot_temporal_spectrum(spectrum_table: pd.DataFrame, output_path: Path, title: str) -> None:
-    """Dibuja el espectro temporal medio de snapshots.
+def plot_temporal_psd_spectrum(
+    spectrum_table: pd.DataFrame,
+    output_path: Path,
+    title: str,
+) -> None:
+    """Dibuja la PSD temporal media de los snapshots.
 
     Parametros:
-        spectrum_table: Tabla con columnas "frequency_hz" y
-            "power_dB_normalized".
+        spectrum_table: Tabla con columnas "frequency_hz" y "psd_dB_Hz".
         output_path: Ruta PNG donde se guarda la figura.
         title: Titulo del grafico.
     """
-    fig, ax = plt.subplots(figsize=(9, 4))
-    ax.plot(spectrum_table["frequency_hz"], spectrum_table["power_dB_normalized"], linewidth=1.5)
-    ax.set_xlabel("Frecuencia [Hz]", fontsize=10, fontweight="bold")
-    ax.set_ylabel("Potencia normalizada [dB]", fontsize=10, fontweight="bold")
-    ax.set_title(title, fontsize=12, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    ax.plot(spectrum_table["frequency_hz"] / 1e6, spectrum_table["psd_dB_Hz"], linewidth=1.5)
+    noise_floor = np.median(spectrum_table["psd_dB_Hz"])
+    ax.axhline(
+        noise_floor,
+        color="red",
+        linestyle="--",
+        label=f"Ruido medio = {noise_floor:.1f} dB/Hz",
+    )
+
     ax.grid(True)
+    ax.set_xlabel("Frecuencia [MHz]", fontsize=10, fontweight="bold")
+    ax.set_ylabel("PSD [dB/Hz]", fontsize=10, fontweight="bold")
+    ax.set_title(title, fontsize=12, fontweight="bold")
+    ax.legend()
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)

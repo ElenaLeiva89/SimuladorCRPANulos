@@ -46,8 +46,11 @@ def test_build_jammer_case_fixed_variable_and_matrix(project_config, variable_pr
     el_min, el_max = variable_project_config.jammer.variable_doa_elevation_range_deg
     assert all(az_min <= j.azimuth_deg <= az_max for j in variable)
     assert all(el_min <= j.elevation_deg <= el_max for j in variable)
-    X, table = generate_received_snapshot_matrix(project_config, element_positions_m, fixed, rng)
+    X, table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(project_config, element_positions_m, fixed, rng)
     assert X.shape == (project_config.array.num_elements, project_config.signal.num_snapshots)
+    assert noise_matrix.shape == X.shape
+    assert jammer_matrix.shape == X.shape
+    assert np.allclose(X, noise_matrix + jammer_matrix)
     assert len(table) == len(fixed)
     assert "jammer_power_linear" in table.columns
 
@@ -131,9 +134,11 @@ def test_generate_received_snapshot_matrix_empty_jammers(project_config, element
     """
     rng_a = np.random.default_rng(7)
     rng_b = np.random.default_rng(7)
-    X, table = generate_received_snapshot_matrix(project_config, element_positions_m, [], rng_a)
+    X, table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(project_config, element_positions_m, [], rng_a)
     noise = generate_complex_noise(project_config, rng_b)
     assert np.allclose(X, noise)
+    assert np.allclose(noise_matrix, noise)
+    assert np.allclose(jammer_matrix, np.zeros_like(noise))
     assert table.empty
 
 

@@ -74,10 +74,7 @@ def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, 
         # Pendiente del chirp en ciclos por muestra^2.
         k = (f_end - f_start) / max(num_snapshots - 1, 1)
 
-        phase = 2.0 * np.pi * (
-            f_start * n
-            + 0.5 * k * n**2
-        ) + phase0
+        phase = 2.0 * np.pi * (f_start * n + 0.5 * k * n**2) + phase0
         return amplitude * np.exp(1j * phase)
     raise ValueError(f"Tipo de jammer no soportado: {jammer.signal_type}")
 
@@ -128,7 +125,7 @@ def generate_received_snapshot_matrix(
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
     rng: np.random.Generator,
-) -> tuple[np.ndarray, pd.DataFrame]:
+) -> tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray]:
     """Genera la matriz recibida X = ruido + suma_j a_j s_j.
 
     Parametros:
@@ -136,18 +133,28 @@ def generate_received_snapshot_matrix(
         element_positions_m: Matriz (N, 3) con posiciones del array.
         jammer_list: Jammers que se inyectan en la matriz recibida.
         rng: Generador aleatorio reproducible.
+
+    Devuelve:
+        snapshot_matrix: Matriz recibida total X.
+        jammer_table: Tabla con los jammers generados y su potencia.
+        noise_matrix: Componente de ruido usada para X.
+        jammer_matrix: Suma de las contribuciones de jammers.
     """
-    X = generate_complex_noise(config, rng)
+    X_noise = generate_complex_noise(config, rng)
+    X_jammer_total = np.zeros_like(X_noise)
+    X = X_noise.copy()
     rows = []
 
     for idx, jammer in enumerate(jammer_list, start=1):
         p_jam = jammer_power_from_jnr(config.noise.noise_power_linear, jammer.jnr_dB)
         a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
         s_jam = generate_jammer_baseband_signal(jammer, config.signal.num_snapshots, p_jam, rng)
-        X += a_jam[:, None] * s_jam[None, :]
+        X_jam = a_jam[:, None] * s_jam[None, :]
+        X_jammer_total += X_jam
+        X += X_jam
 
         row = asdict(jammer)
         row.update({"jammer_index": idx, "jammer_power_linear": p_jam})
         rows.append(row)
 
-    return X, pd.DataFrame(rows)
+    return X, pd.DataFrame(rows), X_noise, X_jammer_total

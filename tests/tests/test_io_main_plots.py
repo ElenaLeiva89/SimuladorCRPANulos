@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from crpa_sim.io_utils import ensure_output_dir, load_project_config, print_generated_files, save_complex_npz, save_config_used, save_dataframe, save_run_log, validate_project_config
 from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, compute_elevation_response_cut_for_plot, conventional_weights
-from crpa_sim.plots import _crpa_display_labels_clockwise, _db_to_radius, plot_3d, plot_array_geometry, plot_heatmap, plot_pattern_azimuth, plot_pattern_elevation, plot_temporal_spectrum
+from crpa_sim.plots import _crpa_display_labels_clockwise, _db_to_radius, plot_3d, plot_array_geometry, plot_heatmap, plot_pattern_azimuth, plot_pattern_elevation, plot_temporal_psd_spectrum
 from dataclasses import replace
 
 def test_io_validation_and_saves(project_config, config_json_path, tmp_path, capsys):
@@ -61,7 +61,11 @@ def test_plots_create_files(project_config, element_positions_m, tmp_path):
     plot_pattern_elevation(el_df, outputs[2], "el", [("Jammer_1", 10), ("Jammer_2", 30, 4)])
     plot_heatmap(grid, outputs[3], "heat", jammer_info=[("Jammer_1", 40.0, 10.0), ("Jammer_2", 70.0, 30.0, 3)])
     plot_3d(grid, outputs[4], "3d", jammer_info=[("Jammer_1", 40.0, 10.0), ("Jammer_2", 70.0, 30.0, 3)])
-    plot_temporal_spectrum(pd.DataFrame({"frequency_hz": np.arange(10), "power_dB_normalized": np.linspace(-30,0,10)}), outputs[5], "fft")
+    plot_temporal_psd_spectrum(
+        pd.DataFrame({"frequency_hz": np.arange(10), "psd_dB_Hz": np.linspace(-140, -100, 10)}),
+        outputs[5],
+        "psd",
+    )
     assert all(p.exists() and p.stat().st_size > 0 for p in outputs)
 
 
@@ -162,7 +166,7 @@ def test_global_outputs_save_npz_without_csv(project_config, element_positions_m
     )
     out = ensure_output_dir(cfg.output.output_dir)
     jammers = build_jammer_case(cfg, rng)
-    X, jammer_table = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+    X, jammer_table, _, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
     w = conventional_weights(cfg, element_positions_m)
     az, el = make_scan_vectors(cfg)
 
@@ -192,7 +196,7 @@ def test_global_outputs_no_data_dir_when_all_outputs_disabled(project_config, el
     )
     out = ensure_output_dir(cfg.output.output_dir)
     jammers = build_jammer_case(cfg, rng)
-    X, jammer_table = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+    X, jammer_table, _, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
     w = conventional_weights(cfg, element_positions_m)
     az, el = make_scan_vectors(cfg)
 

@@ -23,7 +23,7 @@ def test_power_inversion_and_lcmv(project_config, power_inversion_config, elemen
         rng: Generador aleatorio determinista.
     """
     pi_jammers = build_jammer_case(power_inversion_config, rng)
-    X_pi, _ = generate_received_snapshot_matrix(power_inversion_config, element_positions_m, pi_jammers, rng)
+    X_pi, _, _, _ = generate_received_snapshot_matrix(power_inversion_config, element_positions_m, pi_jammers, rng)
     w_pi = compute_power_inversion_weights(power_inversion_config, X_pi)
     c = np.zeros(power_inversion_config.array.num_elements, dtype=complex); c[0] = 1
     assert np.vdot(c, w_pi) == pytest.approx(1+0j, abs=1e-8)
@@ -32,7 +32,7 @@ def test_power_inversion_and_lcmv(project_config, power_inversion_config, elemen
 
     lcmv_config = _ideal_config(project_config)
     jammers = build_jammer_case(lcmv_config, rng)
-    X, _ = generate_received_snapshot_matrix(lcmv_config, element_positions_m, jammers, rng)
+    X, _, _, _ = generate_received_snapshot_matrix(lcmv_config, element_positions_m, jammers, rng)
     w = compute_lcmv_weights(lcmv_config, X, element_positions_m, jammers)
     a_des = steering_vector(lcmv_config, element_positions_m, lcmv_config.beamforming.desired_azimuth_deg, lcmv_config.beamforming.desired_elevation_deg)
     assert np.vdot(w, a_des) == pytest.approx(1+0j, abs=1e-6)
@@ -50,11 +50,11 @@ def test_compute_weights_selector(project_config, power_inversion_config, elemen
     """
     for cfg in [project_config, power_inversion_config]:
         jammers = build_jammer_case(cfg, rng)
-        X, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+        X, _, _, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
         assert compute_weights(cfg, X, element_positions_m, jammers).shape == (7,)
     bad = replace(project_config, beamforming=replace(project_config.beamforming, algorithm="bad"))
     jammers = build_jammer_case(project_config, rng)
-    X, _ = generate_received_snapshot_matrix(project_config, element_positions_m, jammers, rng)
+    X, _, _, _ = generate_received_snapshot_matrix(project_config, element_positions_m, jammers, rng)
     with pytest.raises(ValueError):
         compute_weights(bad, X, element_positions_m, jammers)
 
@@ -68,7 +68,7 @@ def test_null_metrics(project_config, element_positions_m, rng):
     """
     cfg = _ideal_config(project_config)
     jammers = build_jammer_case(cfg, rng)
-    X, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
+    X, _, _, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
     w = compute_lcmv_weights(cfg, X, element_positions_m, jammers)
     depth = compute_null_depth_dB(cfg, element_positions_m, w, jammers[0])
     assert depth <= -100
@@ -98,7 +98,7 @@ def test_lcmv_rejects_more_jammers_than_constraints(project_config, element_posi
     """
     jammers = build_jammer_case(project_config, rng)
     too_many = [jammers[0]] * project_config.array.num_elements
-    X, _ = generate_received_snapshot_matrix(project_config, element_positions_m, too_many[:1], rng)
+    X, _, _, _ = generate_received_snapshot_matrix(project_config, element_positions_m, too_many[:1], rng)
     with pytest.raises(ValueError):
         compute_lcmv_weights(project_config, X, element_positions_m, too_many)
 

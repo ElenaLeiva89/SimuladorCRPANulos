@@ -16,7 +16,7 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 10,
+    "num_montecarlo": 100,
     "random_seed": 12345,
     "doa_mode": "fixed"
   },
