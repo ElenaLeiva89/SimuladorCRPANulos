@@ -58,8 +58,9 @@ def _case_rng(base_seed: int, montecarlo_index: int) -> np.random.Generator:
         base_seed: Semilla base definida en la configuracion.
         montecarlo_index: Indice de la iteracion, empezando en 1.
     """
-    seed = (int(base_seed) * 1664525 + int(montecarlo_index) * 1013904223) % (2**32)
-    return np.random.default_rng(seed)
+    # seed = (int(base_seed) * 1664525 + int(montecarlo_index) * 1013904223) % (2**32)
+    # return np.random.default_rng(seed)
+    return np.random.default_rng()
 
 
 def _save_global_outputs(
