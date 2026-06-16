@@ -90,7 +90,7 @@ def test_run_project_supports_steering_doa_algorithm_combinations(
     cfg = replace(
         base,
         signal=replace(base.signal, num_snapshots=64, fft_size=64),
-        simulation=replace(base.simulation, doa_mode=doa_mode, num_montecarlo=1, random_seed=2718),
+        simulation=replace(base.simulation, doa_mode=doa_mode, num_montecarlo=1),
         beamforming=replace(base.beamforming, algorithm=algorithm, power_inversion_reference_element=0),
         scan=replace(
             base.scan,
@@ -142,7 +142,7 @@ def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm,
     """
     cfg = replace(
         fast_config,
-        simulation=replace(fast_config.simulation, doa_mode="variable", num_montecarlo=3, random_seed=31415),
+        simulation=replace(fast_config.simulation, doa_mode="variable", num_montecarlo=3),
         beamforming=replace(fast_config.beamforming, algorithm=algorithm, power_inversion_reference_element=0),
         jammer=replace(
             fast_config.jammer,

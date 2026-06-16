@@ -41,7 +41,7 @@ def project_config(base_config: ProjectConfig, tmp_path: Path) -> ProjectConfig:
     return replace(
         base_config,
         signal=replace(base_config.signal, num_snapshots=256, fft_size=512),
-        simulation=replace(base_config.simulation, num_montecarlo=1, random_seed=12345, doa_mode="fixed"),
+        simulation=replace(base_config.simulation, num_montecarlo=1, doa_mode="fixed"),
         beamforming=replace(
             base_config.beamforming,
             algorithm="lcmv",
@@ -125,7 +125,7 @@ def fast_config(base_config: ProjectConfig, tmp_path: Path) -> ProjectConfig:
     return replace(
         base_config,
         signal=replace(base_config.signal, num_snapshots=512, fft_size=512),
-        simulation=replace(base_config.simulation, num_montecarlo=2, random_seed=20240507),
+        simulation=replace(base_config.simulation, num_montecarlo=2),
         scan=replace(
             base_config.scan,
             azimuth_scan_step_deg=2.0,

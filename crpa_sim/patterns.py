@@ -53,7 +53,10 @@ def _evaluate_response_complex_for_angles(
     values = []
     for az, el in zip(azimuth_deg_array, elevation_deg_array):
         a = steering_vector(config, element_positions_m, float(az), float(el))
-        values.append(np.vdot(weights, a))
+        if config.beamforming.algorithm in ("lcmv", "lcmvq"):
+            values.append(weights @ a)
+        else:
+            values.append(np.vdot(weights, a))
     return np.asarray(values)
 
 
@@ -149,12 +152,18 @@ def compute_2d_response_grid(
         k_rad_m = 2.0 * np.pi / config.signal.wavelength_m
         phase = k_rad_m * (u @ element_positions_m.T)
         steering = np.exp(1j * phase)
-        response_complex = steering @ np.conjugate(weights)
+        if config.beamforming.algorithm in ("lcmv", "lcmvq"):
+            response_complex = steering @ weights
+        else:
+            response_complex = steering @ np.conjugate(weights)
     elif config.array.steering_model == "measured":
         # Rama measured optimizada: steering para toda la malla en una matriz.
         # Shape: (num_puntos_malla, num_elementos).
         steering = measured_steering_matrix_for_angles(config, az_flat, el_flat)
-        response_complex = steering @ np.conjugate(weights)
+        if config.beamforming.algorithm in ("lcmv", "lcmvq"):
+            response_complex = steering @ weights
+        else:
+            response_complex = steering @ np.conjugate(weights)
     else:
         raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
 

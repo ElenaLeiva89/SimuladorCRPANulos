@@ -212,7 +212,6 @@ Variables:
 ```json
 {
   "num_montecarlo": 10,
-  "random_seed": 12345,
   "doa_mode": "fixed"
 }
 ```
@@ -220,12 +219,16 @@ Variables:
 Variables:
 
 - `num_montecarlo`: número de iteraciones, debe ser al menos `1`.
-- `random_seed`: semilla base reproducible.
 - `doa_mode`: `fixed` o `variable`.
 
 En modo `fixed`, cada jammer usa el azimut/elevación de su plantilla. En modo
 `variable`, cada iteración sortea las direcciones dentro de los rangos
 configurados.
+
+El simulador usa un generador aleatorio nuevo sin semilla configurada en cada
+iteracion Monte Carlo. Por tanto, el ruido, las fases iniciales de los jammers
+y las DoA variables son estocasticos y no se reproducen exactamente entre
+ejecuciones.
 
 ### `beamforming_config`
 

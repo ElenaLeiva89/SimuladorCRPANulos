@@ -51,18 +51,6 @@ from crpa_sim.plots import (
 )
 
 
-def _case_rng(base_seed: int, montecarlo_index: int) -> np.random.Generator:
-    """Crea un generador reproducible para una iteracion Monte Carlo.
-
-    Parametros:
-        base_seed: Semilla base definida en la configuracion.
-        montecarlo_index: Indice de la iteracion, empezando en 1.
-    """
-    # seed = (int(base_seed) * 1664525 + int(montecarlo_index) * 1013904223) % (2**32)
-    # return np.random.default_rng(seed)
-    return np.random.default_rng()
-
-
 def _save_global_outputs(
     config: ProjectConfig,
     output_dir: Path,
@@ -294,7 +282,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
     summary_rows: list[dict] = []
 
     for mc in range(1, config.simulation.num_montecarlo + 1):
-        rng = _case_rng(config.simulation.random_seed, mc)
+        rng = np.random.default_rng()
         jammer_list = build_jammer_case(config, rng)
         snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
             config,

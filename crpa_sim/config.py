@@ -17,7 +17,7 @@ from typing import Any
 GNSS_CARRIER_FREQUENCIES_HZ = {"E5": 1.19179e9, "E6": 1.27875e9, "E1": 1.57542e9}
 GNSS_BAND_LABELS = {1: "E5", 2: "E6", 3: "E1"}
 VALID_DOA_MODES = {"fixed", "variable"}
-VALID_ALGORITHMS = {"power_inversion", "lcmv"}
+VALID_ALGORITHMS = {"power_inversion", "lcmv", "lcmvq"}
 VALID_JAMMER_SIGNAL_TYPES = {"tone", "complex_gaussian", "chirp"}
 
 
@@ -114,7 +114,6 @@ class SignalConfig:
 @dataclass(frozen=True)
 class SimulationConfig:
     num_montecarlo: int
-    random_seed: int
     doa_mode: str
 
     @classmethod
@@ -126,7 +125,6 @@ class SimulationConfig:
         """
         values = dict(values)
         values["num_montecarlo"] = int(values["num_montecarlo"])
-        values["random_seed"] = int(values["random_seed"])
         values["doa_mode"] = str(values.get("doa_mode", "fixed")).lower()
         if values["doa_mode"] not in VALID_DOA_MODES:
             raise ValueError(f"doa_mode debe ser uno de {sorted(VALID_DOA_MODES)}")

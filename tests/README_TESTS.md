@@ -5,6 +5,7 @@ La suite esta adaptada a la version actual del proyecto:
 - `simulation_config.doa_mode`: valor unico por ejecucion (`fixed` o `variable`).
 - `beamforming_config.algorithm`: valor unico por ejecucion (`lcmv` o `power_inversion`).
 - `jammer_config.num_jammers` y `jammer_config.jnr_dB`: valores comunes por corrida.
+- La ejecucion principal usa generadores aleatorios sin semilla de configuracion; la suite no exige reproducibilidad exacta entre corridas Monte Carlo.
 - `generate_received_snapshot_matrix(...)`: devuelve matriz total, tabla de jammers, ruido y contribucion jammer.
 - `compute_weights(config, snapshot_matrix, element_positions_m, jammer_list)`.
 - Metricas por jammer exportadas con contexto de Monte Carlo, algoritmo, modo DoA, tipo de jammer y region 2D de nulo.

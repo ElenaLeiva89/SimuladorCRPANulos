@@ -38,7 +38,7 @@ def test_zenith_steering_vector_is_all_ones_for_planar_array(base_config):
 
 def test_invalid_doa_mode_is_rejected():
     with pytest.raises(ValueError, match="doa_mode"):
-        SimulationConfig.from_dict({"num_montecarlo": 1, "random_seed": 1, "doa_mode": "sweep"})
+        SimulationConfig.from_dict({"num_montecarlo": 1, "doa_mode": "sweep"})
 
 
 def test_invalid_algorithm_is_rejected():

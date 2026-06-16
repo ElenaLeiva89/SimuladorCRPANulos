@@ -16,12 +16,11 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 100,
-    "random_seed": 12345,
+    "num_montecarlo": 10,
     "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "power_inversion",
+    "algorithm": "lcmvq",
     "desired_azimuth_deg": 0.0,
     "desired_elevation_deg": 90.0,
     "diagonal_loading_factor": 0.001,
@@ -45,7 +44,7 @@
     "variable_doa_azimuth_range_deg": [0.0, 360.0],
     "variable_doa_elevation_range_deg": [0.0, 90.0],
     "base_jammers": [
-      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 20.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
+      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 60.0, "signal_type": "tone", "normalized_frequency": 0.05, "chirp_frequency":60000000},
       {"name": "Jammer_2", "azimuth_deg": 70.0,  "elevation_deg": 30.0, "signal_type": "tone", "normalized_frequency": 0.11, "chirp_frequency":60000000},
       {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "normalized_frequency": 0.00, "chirp_frequency":60000000},
       {"name": "Jammer_4", "azimuth_deg": 270.0, "elevation_deg": 10.0, "signal_type": "tone", "normalized_frequency": 0.17, "chirp_frequency":60000000},
@@ -54,9 +53,9 @@
     ]
   },
   "output_config": {
-    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}",
+    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_Elevacion60",
     "save_csv": true,
-    "save_npz": true,
+    "save_npz": false,
     "save_plots": true,
     "csv_separator": ";",
     "csv_decimal": ","

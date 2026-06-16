@@ -79,12 +79,69 @@ def compute_lcmv_weights(
 
     for jammer in jammer_list:
         steering_vectors.append(steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))
-        desired_response.append(0.0 + 0.0j)
+        # CAMBIO DEL DEPTH DB
+        #desired_response.append(0.0 + 0.0j)
+        desired_response.append(0.01 + 0.0j)
+
+    # C = np.column_stack(steering_vectors)
+    # f = np.asarray(desired_response, dtype=complex)
+    # middle = C.conj().T @ R_inv @ C
+    # return R_inv @ C @ np.linalg.pinv(middle) @ f
 
     C = np.column_stack(steering_vectors)
     f = np.asarray(desired_response, dtype=complex)
     middle = C.conj().T @ R_inv @ C
-    return R_inv @ C @ np.linalg.pinv(middle) @ f
+    w = R_inv @ C @ np.linalg.pinv(middle) @ f
+    w = np.conjugate(w)
+
+    return w
+
+
+def compute_lcmvq_weights(
+    config: ProjectConfig,
+    element_positions_m: np.ndarray,
+    jammer_list: Sequence[JammerInstance],
+) -> np.ndarray:
+    """Calcula pesos LCMVQ: restricciones geométricas sin covarianza."""
+
+    num_elements = config.array.num_elements
+
+    main_constraint = np.zeros(num_elements, dtype=complex)
+    main_constraint[0] = 1.0 + 0.0j
+
+    steering_vectors = [main_constraint]
+
+    a_des = steering_vector(
+        config,
+        element_positions_m,
+        config.beamforming.desired_azimuth_deg,
+        config.beamforming.desired_elevation_deg,
+    )
+    steering_vectors.append(a_des)
+
+    desired_response = [1.0 + 0.0j, 1.0 + 0.0j]
+
+    for jammer in jammer_list:
+        a_jam = steering_vector(
+            config,
+            element_positions_m,
+            jammer.azimuth_deg,
+            jammer.elevation_deg,
+        )
+        steering_vectors.append(a_jam)
+        # CAMBIO DEL DEPTH DB
+        # desired_response.append(0.00 + 0.0j)
+        desired_response.append(0.01 + 0.0j)
+
+    C = np.column_stack(steering_vectors)
+    f = np.asarray(desired_response, dtype=complex)
+
+    w = C @ np.linalg.pinv(C.conj().T @ C) @ f
+
+    # Si quieres mantener convención MATLAB:
+    w = np.conjugate(w)
+
+    return w
 
 
 def compute_weights(
@@ -108,4 +165,6 @@ def compute_weights(
         return compute_power_inversion_weights(config, snapshot_matrix)
     if algorithm == "lcmv":
         return compute_lcmv_weights(config, snapshot_matrix, element_positions_m, jammer_list)
+    if algorithm == "lcmvq":
+        return compute_lcmvq_weights(config, element_positions_m, jammer_list)
     raise ValueError(f"Algoritmo no soportado: {algorithm}")

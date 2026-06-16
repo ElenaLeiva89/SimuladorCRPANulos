@@ -119,9 +119,8 @@ def test_main_run_project_light(config_json_path):
     Parametros:
         config_json_path: Ruta temporal a un JSON de configuracion valido.
     """
-    from main import _case_rng, run_project
-    r1, r2 = _case_rng(12345, 1), _case_rng(12345, 1)
-    assert r1.random() == pytest.approx(r2.random())
+    from main import run_project
+
     run_project(config_json_path)
     cfg = load_project_config(config_json_path)
     out = Path(cfg.output.output_dir)

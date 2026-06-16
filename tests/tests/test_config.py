@@ -39,7 +39,7 @@ def test_invalid_band_doa_and_algorithm():
     with pytest.raises(ValueError):
         _ = SignalConfig("BAD", 299792458.0, 64e6, 1024).carrier_frequency_hz
     with pytest.raises(ValueError):
-        SimulationConfig.from_dict({"num_montecarlo": 1, "random_seed": 1, "doa_mode": "bad"})
+        SimulationConfig.from_dict({"num_montecarlo": 1, "doa_mode": "bad"})
     with pytest.raises(ValueError):
         BeamformingConfig.from_dict({"algorithm": "bad", "desired_azimuth_deg": 0, "desired_elevation_deg": 90, "diagonal_loading_factor": 0.001})
 
@@ -49,9 +49,10 @@ def test_valid_config_parsing():
     Parametros:
         No recibe parametros.
     """
-    sim = SimulationConfig.from_dict({"num_montecarlo": "2", "random_seed": "3", "doa_mode": "VARIABLE"})
+    sim = SimulationConfig.from_dict({"num_montecarlo": "2", "doa_mode": "VARIABLE"})
     bf = BeamformingConfig.from_dict({"algorithm": "LCMV", "desired_azimuth_deg": 0, "desired_elevation_deg": 90, "diagonal_loading_factor": 0.001, "power_inversion_reference_element": "0"})
     jam = JammerConfig.from_dict({"num_jammers": "1", "jnr_dB": "40", "variable_doa_azimuth_range_deg": ["0", "360"], "variable_doa_elevation_range_deg": ["5", "85"], "base_jammers": [{"name": "J1", "azimuth_deg": 40, "elevation_deg": 10, "signal_type": "TONE"}]})
+    assert sim.num_montecarlo == 2
     assert sim.doa_mode == "variable"
     assert bf.algorithm == "lcmv"
     assert jam.base_jammers[0].signal_type == "tone"

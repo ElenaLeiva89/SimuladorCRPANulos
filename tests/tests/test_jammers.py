@@ -55,17 +55,15 @@ def test_build_jammer_case_fixed_variable_and_matrix(project_config, variable_pr
     assert "jammer_power_linear" in table.columns
 
 
-def test_variable_doa_is_reproducible_per_montecarlo_seed(project_config):
-    """Comprueba que DoA variable depende de la semilla Monte Carlo.
+def test_variable_doa_uses_runtime_rng_without_config_seed(project_config):
+    """Comprueba DoA variable sin semilla de configuracion.
 
     Parametros:
         project_config: Configuracion base de simulacion.
     """
-    from main import _case_rng
-
     cfg = replace(
         project_config,
-        simulation=replace(project_config.simulation, doa_mode="variable", random_seed=9876),
+        simulation=replace(project_config.simulation, doa_mode="variable"),
         jammer=replace(
             project_config.jammer,
             num_jammers=2,
@@ -74,18 +72,17 @@ def test_variable_doa_is_reproducible_per_montecarlo_seed(project_config):
         ),
     )
 
-    first = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 1))
-    first_repeat = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 1))
-    second = build_jammer_case(cfg, _case_rng(cfg.simulation.random_seed, 2))
+    first = build_jammer_case(cfg, np.random.default_rng())
+    second = build_jammer_case(cfg, np.random.default_rng())
 
     first_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in first])
-    repeat_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in first_repeat])
     second_coords = np.array([(j.azimuth_deg, j.elevation_deg) for j in second])
 
-    np.testing.assert_allclose(first_coords, repeat_coords)
-    assert not np.allclose(first_coords, second_coords)
+    assert not hasattr(cfg.simulation, "random_seed")
     assert np.all((0.0 <= first_coords[:, 0]) & (first_coords[:, 0] <= 80.0))
     assert np.all((10.0 <= first_coords[:, 1]) & (first_coords[:, 1] <= 80.0))
+    assert np.all((0.0 <= second_coords[:, 0]) & (second_coords[:, 0] <= 80.0))
+    assert np.all((10.0 <= second_coords[:, 1]) & (second_coords[:, 1] <= 80.0))
 
 
 def test_build_jammer_case_preserves_chirp_frequency(project_config, rng):

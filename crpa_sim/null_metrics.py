@@ -35,7 +35,11 @@ def compute_null_depth_dB(
     """
     a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
 
-    gain_abs = abs(np.vdot(weights, a_j))
+    
+    if config.beamforming.algorithm in ("lcmv", "lcmvq"):
+        gain_abs = abs(weights @ a_j)
+    else:
+        gain_abs = abs(np.vdot(weights, a_j))
     reference = abs(reference_gain_abs)
 
     if reference == 0.0:
