@@ -237,6 +237,11 @@ def _save_jammer_plots(
         azimuth_scan_deg,
         elevation_scan_deg,
     )
+    desired_info = (
+        "Desired",
+        config.beamforming.desired_azimuth_deg,
+        config.beamforming.desired_elevation_deg,
+    )
     plot_3d(
         radiation_grid,
         output_dir / "pattern_3d_comparison.png",
@@ -250,6 +255,7 @@ def _save_jammer_plots(
         f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D",
         adaptive_label=config.beamforming.algorithm,
         jammer_info=jammer_info_3d,
+        desired_info=desired_info,
     )
 
 

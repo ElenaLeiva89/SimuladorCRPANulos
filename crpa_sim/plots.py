@@ -254,6 +254,7 @@ def plot_heatmap(
     title: str,
     adaptive_label: str = "Algoritmo",
     jammer_info: list[tuple[str, float, float] | tuple[str, float, float, int]] | None = None,
+    desired_info: tuple[str, float, float] | None = None,
 ) -> None:
     """Dibuja un mapa 2D azimut/elevacion y marca los nulos de jammers.
 
@@ -300,6 +301,29 @@ def plot_heatmap(
                 linewidths=2.5,
                 label=f"Nulo {jammer_name} ({z_value:.1f} dB)",
             )
+
+    if desired_info is not None:
+        desired_name, desired_az, desired_el = desired_info
+
+        z_desired = _nearest_grid_value(
+            adaptive_grid["azimuth_deg"],
+            adaptive_grid["elevation_deg"],
+            response_dB,
+            float(desired_az),
+            float(desired_el),
+        )
+        ax.scatter(
+            desired_az,
+            desired_el,
+            s=120,
+            marker="o",
+            facecolors="none",
+            edgecolors="black",
+            linewidths=2.5,
+            label=f"Desired direction ({desired_az:.1f}°, {desired_el:.1f}°)",
+        )
+    
+    if jammer_info or desired_info is not None:
         ax.legend(loc="upper right", fontsize=8)
 
     ax.set_xlabel("Azimut [deg]", fontsize=10, fontweight="bold")
