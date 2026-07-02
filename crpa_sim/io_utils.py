@@ -186,7 +186,7 @@ def save_run_log(config: ProjectConfig, output_dir: Path, extra_rows: list[dict]
         f.write(f"Boresight elevacion: {config.array.array_boresight_elevation_deg} deg\n")
         f.write(f"Banda GNSS: {config.signal.band_label}\n")
         f.write(f"Frecuencia portadora: {config.signal.carrier_frequency_hz} Hz\n")
-        f.write(f"Longitud de onda: {config.signal.wavelength_m} m\n")
+        f.write(f"Longitud de onda de la señal GNSS: {config.signal.wavelength_m} m\n")
         f.write(f"Separacion radial: {config.element_spacing_m} m\n")
         f.write(f"Sample rate: {config.signal.sample_rate_hz} Hz\n")
         f.write(f"Snapshots: {config.signal.num_snapshots}\n")

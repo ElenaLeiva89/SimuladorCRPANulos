@@ -4,17 +4,14 @@ Las funciones de este modulo no calculan pesos: reciben un vector de pesos ya
 estimado y miden como responde el patron en la direccion de cada jammer. Se
 exporta una fila por jammer, umbral y Monte Carlo.
 """
-
 from __future__ import annotations
-
 from typing import Sequence
-
 import numpy as np
 import pandas as pd
-
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
 from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_2d_response_grid
+from .jammers import jammer_center_frequency_hz
 
 
 def compute_null_depth_dB(
@@ -33,7 +30,16 @@ def compute_null_depth_dB(
         jammer: Jammer cuya direccion se evalua.
         reference_gain_abs: Ganancia absoluta de referencia para convertir a dB.
     """
-    a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
+    #a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
+    f_jam_hz = jammer_center_frequency_hz(config, jammer)
+    lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+    a_j = steering_vector(
+        config,
+        element_positions_m,
+        jammer.azimuth_deg,
+        jammer.elevation_deg,
+        wavelength_m=lambda_jam_m,
+    )
 
     
     if config.beamforming.algorithm in ("lcmv", "lcmvq"):

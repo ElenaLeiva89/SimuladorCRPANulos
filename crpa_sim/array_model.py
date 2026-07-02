@@ -318,14 +318,18 @@ def steering_vector(
     element_positions_m: np.ndarray,
     azimuth_deg: float,
     elevation_deg: float,
+    wavelength_m: float | None = None,
 ) -> np.ndarray:
     """Devuelve el steering vector segun el modelo configurado."""
+    if wavelength_m is None:
+        wavelength_m = config.signal.wavelength_m
+
     if config.array.steering_model == "ideal":
         return steering_vector_ideal(
             element_positions_m,
             azimuth_deg,
             elevation_deg,
-            config.signal.wavelength_m,
+            wavelength_m,
         )
     if config.array.steering_model == "measured":
         return steering_vector_measured(config, azimuth_deg, elevation_deg)

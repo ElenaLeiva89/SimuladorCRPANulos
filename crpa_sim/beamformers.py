@@ -4,16 +4,13 @@ Este modulo contiene solo los algoritmos seleccionables desde la
 configuracion validada: Power Inversion y LCMV. Los pesos convencionales se
 mantienen en `patterns.py` como referencia para comparativas y plots.
 """
-
 from __future__ import annotations
-
 from typing import Sequence
-
 import numpy as np
-
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
 from .covariance import compute_sample_covariance, invert_covariance
+from .jammers import jammer_center_frequency_hz
 
 
 def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
@@ -78,10 +75,22 @@ def compute_lcmv_weights(
     desired_response = [1.0 + 0.0j]
 
     for jammer in jammer_list:
-        steering_vectors.append(steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))
+        #steering_vectors.append(steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))
+        f_jam_hz = jammer_center_frequency_hz(config, jammer)
+        lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        steering_vectors.append(
+            steering_vector(
+                config,
+                element_positions_m,
+                jammer.azimuth_deg,
+                jammer.elevation_deg,
+                wavelength_m=lambda_jam_m,
+            )
+        )
+
         # CAMBIO DEL DEPTH DB
-        #desired_response.append(0.0 + 0.0j)
-        desired_response.append(0.01 + 0.0j)
+        desired_response.append(0.0 + 0.0j)
+        #desired_response.append(0.01 + 0.0j)
 
     # C = np.column_stack(steering_vectors)
     # f = np.asarray(desired_response, dtype=complex)
@@ -122,16 +131,25 @@ def compute_lcmvq_weights(
     desired_response = [1.0 + 0.0j, 1.0 + 0.0j]
 
     for jammer in jammer_list:
+        # a_jam = steering_vector(
+        #     config,
+        #     element_positions_m,
+        #     jammer.azimuth_deg,
+        #     jammer.elevation_deg,
+        # )
+        f_jam_hz = jammer_center_frequency_hz(config, jammer)
+        lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
         a_jam = steering_vector(
             config,
             element_positions_m,
             jammer.azimuth_deg,
             jammer.elevation_deg,
+            wavelength_m=lambda_jam_m,
         )
         steering_vectors.append(a_jam)
         # CAMBIO DEL DEPTH DB
-        # desired_response.append(0.00 + 0.0j)
-        desired_response.append(0.01 + 0.0j)
+        desired_response.append(0.00 + 0.0j)
+        #desired_response.append(0.01 + 0.0j)
 
     C = np.column_stack(steering_vectors)
     f = np.asarray(desired_response, dtype=complex)
