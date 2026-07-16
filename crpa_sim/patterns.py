@@ -35,12 +35,16 @@ def _evaluate_response_complex_for_angles(
     weights: np.ndarray,
     azimuth_deg_array: np.ndarray,
     elevation_deg_array: np.ndarray,
+    wavelength_m: float | None = None,
 ) -> np.ndarray:
     """Evalua B=w^H a(az, el) devolviendo valores complejos.
 
     Para ideal se mantiene el calculo analitico existente. Para measured se
     obtiene de una vez la matriz de steering medida para todos los pares az/el.
     """
+    if wavelength_m is None:
+        wavelength_m = config.signal.wavelength_m
+
     azimuth_deg_array = np.asarray(azimuth_deg_array, dtype=float)
     elevation_deg_array = np.asarray(elevation_deg_array, dtype=float)
     if len(azimuth_deg_array) != len(elevation_deg_array):
@@ -52,7 +56,8 @@ def _evaluate_response_complex_for_angles(
 
     values = []
     for az, el in zip(azimuth_deg_array, elevation_deg_array):
-        a = steering_vector(config, element_positions_m, float(az), float(el))
+        # a = steering_vector(config, element_positions_m, float(az), float(el))
+        a = steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m,)
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
             values.append(weights @ a)
         else:
@@ -67,6 +72,7 @@ def evaluate_response_for_angles(
     azimuth_deg_array: np.ndarray,
     elevation_deg_array: np.ndarray,
     normalize: bool = True,
+    wavelength_m: float | None = None,
 ) -> pd.DataFrame:
     """Evalua B=w^H a(az, el) en una lista de pares angulares."""
     values = _evaluate_response_complex_for_angles(
@@ -75,6 +81,7 @@ def evaluate_response_for_angles(
         weights,
         azimuth_deg_array,
         elevation_deg_array,
+        wavelength_m=wavelength_m,
     )
 
     response_abs = np.abs(values)
@@ -110,10 +117,11 @@ def compute_azimuth_response_cut(
     weights: np.ndarray,
     azimuth_scan_deg: np.ndarray,
     fixed_elevation_deg: float,
+    wavelength_m: float | None = None,
 ) -> pd.DataFrame:
     """Calcula un corte de patron variando azimut con elevacion fija."""
     elevations = np.full_like(azimuth_scan_deg, fixed_elevation_deg, dtype=float)
-    return evaluate_response_for_angles(config, element_positions_m, weights, azimuth_scan_deg, elevations)
+    return evaluate_response_for_angles(config, element_positions_m, weights, azimuth_scan_deg, elevations, wavelength_m=wavelength_m)
 
 
 def compute_elevation_response_cut(
@@ -122,10 +130,11 @@ def compute_elevation_response_cut(
     weights: np.ndarray,
     elevation_scan_deg: np.ndarray,
     fixed_azimuth_deg: float,
+    wavelength_m: float | None = None,
 ) -> pd.DataFrame:
     """Calcula un corte de patron variando elevacion con azimut fijo."""
     azimuths = np.full_like(elevation_scan_deg, fixed_azimuth_deg, dtype=float)
-    return evaluate_response_for_angles(config, element_positions_m, weights, azimuths, elevation_scan_deg)
+    return evaluate_response_for_angles(config, element_positions_m, weights, azimuths, elevation_scan_deg, wavelength_m=wavelength_m,)
 
 
 def compute_2d_response_grid(
@@ -134,11 +143,18 @@ def compute_2d_response_grid(
     weights: np.ndarray,
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
+    wavelength_m: float | None = None,
 ) -> dict[str, np.ndarray]:
     """Evalua el patron en una malla 2D azimut/elevacion."""
     az_grid, el_grid = np.meshgrid(azimuth_scan_deg, elevation_scan_deg, indexing="xy")
     az_flat = az_grid.ravel()
     el_flat = el_grid.ravel()
+
+    if wavelength_m is None:
+        wavelength_m = config.signal.wavelength_m
+
+    if wavelength_m <= 0.0:
+        raise ValueError("wavelength_m debe ser mayor que cero.")
 
     if config.array.steering_model == "ideal":
         # Rama ideal: se conserva el calculo vectorizado original.
@@ -149,7 +165,8 @@ def compute_2d_response_grid(
             np.cos(el_rad) * np.sin(az_rad),
             np.sin(el_rad),
         ])
-        k_rad_m = 2.0 * np.pi / config.signal.wavelength_m
+        # k_rad_m = 2.0 * np.pi / config.signal.wavelength_m
+        k_rad_m = 2.0 * np.pi / wavelength_m
         phase = k_rad_m * (u @ element_positions_m.T)
         steering = np.exp(1j * phase)
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
@@ -202,6 +219,7 @@ def compute_elevation_response_cut_for_plot(
     weights: np.ndarray,
     elevation_scan_deg: np.ndarray,
     fixed_azimuth_deg: float,
+    wavelength_m: float | None = None,
 ) -> pd.DataFrame:
     """Construye el corte vertical simetrico que espera el plot polar.
 
@@ -226,6 +244,7 @@ def compute_elevation_response_cut_for_plot(
         weights,
         az_left_vec,
         el_left,
+        wavelength_m=wavelength_m,
     )
     left["polar_theta_deg"] = -90.0 + left["elevation_deg"]
     left["plot_side"] = "left"
@@ -240,6 +259,7 @@ def compute_elevation_response_cut_for_plot(
         weights,
         az_right_vec,
         el_right,
+        wavelength_m=wavelength_m,
     )
     right["polar_theta_deg"] = 90.0 - right["elevation_deg"]
     right["plot_side"] = "right"

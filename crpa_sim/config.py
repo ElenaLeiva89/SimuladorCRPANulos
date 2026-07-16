@@ -37,7 +37,7 @@ class ArrayConfig:
     num_elements: int
     geometry: str
     element_type: str
-    element_spacing_over_lambda: float
+    element_spacing_m: float
     array_boresight_elevation_deg: float
     steering_model: str = "ideal"
     measured_steering_file: str | None = None
@@ -196,6 +196,7 @@ class JammerTemplate:
     azimuth_deg: float
     elevation_deg: float
     signal_type: str = "tone"
+    center_frequency_hz: float | None = None
     normalized_frequency: float = 0.0
     bandwidth_hz: float | None = None
     chirp_frequency: float | None = None
@@ -209,6 +210,7 @@ class JammerTemplate:
         """
         values = dict(values)
         values["signal_type"] = str(values.get("signal_type", "complex_gaussian")).lower()
+        values.setdefault("center_frequency_hz", None)
         values.setdefault("normalized_frequency", 0.0)
         values.setdefault("bandwidth_hz", None)
         values.setdefault("chirp_frequency", None)
@@ -222,6 +224,7 @@ class JammerInstance:
     elevation_deg: float
     jnr_dB: float
     signal_type: str = "complex_gaussian"
+    center_frequency_hz: float | None = None
     normalized_frequency: float = 0.0
     bandwidth_hz: float | None = None
     chirp_frequency: float | None = None
@@ -283,9 +286,5 @@ class ProjectConfig:
 
     @property
     def element_spacing_m(self) -> float:
-        """Separacion fisica entre centro y elementos exteriores.
-
-        Parametros:
-            No recibe parametros; usa element_spacing_over_lambda y wavelength_m.
-        """
-        return self.array.element_spacing_over_lambda * self.signal.wavelength_m
+        """Separación física radial entre el elemento central y el anillo exterior."""
+        return self.array.element_spacing_m

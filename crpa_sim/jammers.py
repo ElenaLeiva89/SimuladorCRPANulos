@@ -112,6 +112,7 @@ def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[J
                 elevation_deg=el,
                 jnr_dB=config.jammer.jnr_dB,
                 signal_type=template.signal_type,
+                center_frequency_hz=template.center_frequency_hz,
                 normalized_frequency=template.normalized_frequency,
                 bandwidth_hz=template.bandwidth_hz,
                 chirp_frequency=template.chirp_frequency,
@@ -148,28 +149,49 @@ def generate_received_snapshot_matrix(
     for idx, jammer in enumerate(jammer_list, start=1):
         p_jam = jammer_power_from_jnr(config.noise.noise_power_linear, jammer.jnr_dB)
         #a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
-        f_jam_hz = jammer_center_frequency_hz(config, jammer)
-        lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
-        a_jam = steering_vector(
-            config,
-            element_positions_m,
-            jammer.azimuth_deg,
-            jammer.elevation_deg,
-            wavelength_m=lambda_jam_m,
-        )
+        # f_jam_hz = jammer_center_frequency_hz(config, jammer)
+        # lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        #lambda_jam_m = jammer_wavelength_m(config, jammer)
+        frequency_hz = jammer_center_frequency_hz(config, jammer)
+        wavelength_m = jammer_wavelength_m(config, jammer)
+        a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg, 
+                                #wavelength_m=lambda_jam_m, 
+                                wavelength_m=wavelength_m,)
         s_jam = generate_jammer_baseband_signal(jammer, config.signal.num_snapshots, p_jam, rng)
         X_jam = a_jam[:, None] * s_jam[None, :]
         X_jammer_total += X_jam
         X += X_jam
 
         row = asdict(jammer)
-        row.update({"jammer_index": idx, "jammer_power_linear": p_jam})
+        row.update({"jammer_index": idx, "jammer_power_linear": p_jam, "jammer_center_frequency_hz": frequency_hz, "jammer_wavelength_m": wavelength_m,})
         rows.append(row)
 
     return X, pd.DataFrame(rows), X_noise, X_jammer_total
 
 
-def jammer_center_frequency_hz(config: ProjectConfig, jammer: JammerInstance) -> float:
-    """Frecuencia RF central del jammer."""
+# def jammer_center_frequency_hz(config: ProjectConfig, jammer: JammerInstance) -> float:
+#     """Frecuencia RF central del jammer."""
 
-    return config.signal.carrier_frequency_hz + jammer.normalized_frequency * config.signal.sample_rate_hz
+#     return config.signal.carrier_frequency_hz + jammer.normalized_frequency * config.signal.sample_rate_hz
+
+def jammer_center_frequency_hz(config: ProjectConfig, jammer: JammerInstance,) -> float:
+    """Devuelve la frecuencia RF central del jammer."""
+
+    if jammer.center_frequency_hz is not None:
+        frequency_hz = float(jammer.center_frequency_hz)
+    else:
+        frequency_hz = (config.signal.carrier_frequency_hz + jammer.normalized_frequency * config.signal.sample_rate_hz)
+    if frequency_hz <= 0.0:
+        raise ValueError(f"La frecuencia central de {jammer.name} debe ser mayor que cero.")
+
+    return frequency_hz
+
+
+def jammer_wavelength_m(
+    config: ProjectConfig,
+    jammer: JammerInstance,
+) -> float:
+    """Devuelve la longitud de onda correspondiente al jammer."""
+
+    frequency_hz = jammer_center_frequency_hz(config, jammer)
+    return config.signal.speed_of_light_m_s / frequency_hz

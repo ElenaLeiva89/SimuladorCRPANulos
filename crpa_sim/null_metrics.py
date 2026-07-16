@@ -11,7 +11,8 @@ import pandas as pd
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
 from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_2d_response_grid
-from .jammers import jammer_center_frequency_hz
+# from .jammers import jammer_center_frequency_hz
+from .jammers import jammer_center_frequency_hz, jammer_wavelength_m
 
 
 def compute_null_depth_dB(
@@ -31,8 +32,9 @@ def compute_null_depth_dB(
         reference_gain_abs: Ganancia absoluta de referencia para convertir a dB.
     """
     #a_j = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
-    f_jam_hz = jammer_center_frequency_hz(config, jammer)
-    lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+    # f_jam_hz = jammer_center_frequency_hz(config, jammer)
+    # lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+    lambda_jam_m = jammer_wavelength_m(config, jammer)
     a_j = steering_vector(
         config,
         element_positions_m,
@@ -81,23 +83,35 @@ def compute_null_metrics_for_jammers(
     rows: list[dict] = []
     cuts: dict[str, pd.DataFrame] = {}
 
-    grid_2d = compute_2d_response_grid(
-        config,
-        element_positions_m,
-        weights,
-        azimuth_scan_deg,
-        elevation_scan_deg,
-    )
+    # grid_2d = compute_2d_response_grid(
+    #     config,
+    #     element_positions_m,
+    #     weights,
+    #     azimuth_scan_deg,
+    #     elevation_scan_deg,
+    # )
 
-    response_2d_dB = grid_2d["response_power_dB"]
+    # response_2d_dB = grid_2d["response_power_dB"]
 
     for jammer in jammer_list:
+        lambda_jam_m = jammer_wavelength_m(config, jammer)
+        grid_2d = compute_2d_response_grid(
+            config,
+            element_positions_m,
+            weights,
+            azimuth_scan_deg,
+            elevation_scan_deg,
+            wavelength_m=lambda_jam_m,
+        )
+
+        response_2d_dB = grid_2d["response_power_dB"]
         az_cut = compute_azimuth_response_cut(
             config,
             element_positions_m,
             weights,
             azimuth_scan_deg,
             fixed_elevation_deg=jammer.elevation_deg,
+            wavelength_m=lambda_jam_m,
         )
         el_cut = compute_elevation_response_cut(
             config,
@@ -105,6 +119,7 @@ def compute_null_metrics_for_jammers(
             weights,
             elevation_scan_deg,
             fixed_azimuth_deg=jammer.azimuth_deg,
+            wavelength_m=lambda_jam_m,
         )
 
         cuts[f"{jammer.name}_azimuth_cut"] = az_cut
@@ -130,6 +145,8 @@ def compute_null_metrics_for_jammers(
                     "jammer_elevation_deg": jammer.elevation_deg,
                     "jammer_jnr_dB": jammer.jnr_dB,
                     "jammer_signal_type": jammer.signal_type,
+                    "jammer_center_frequency_hz": jammer_center_frequency_hz(config, jammer),
+                    "jammer_wavelength_m": lambda_jam_m,
                     "null_depth_dB": null_depth,
                     "attenuation_threshold_dB": threshold,
                     "null_area_cells": region_2d["null_area_cells_2d"],

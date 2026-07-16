@@ -325,12 +325,7 @@ def steering_vector(
         wavelength_m = config.signal.wavelength_m
 
     if config.array.steering_model == "ideal":
-        return steering_vector_ideal(
-            element_positions_m,
-            azimuth_deg,
-            elevation_deg,
-            wavelength_m,
-        )
+        return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m,)
     if config.array.steering_model == "measured":
         return steering_vector_measured(config, azimuth_deg, elevation_deg)
     raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")

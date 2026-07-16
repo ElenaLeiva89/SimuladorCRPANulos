@@ -73,8 +73,8 @@ def validate_project_config(config: ProjectConfig) -> None:
     """
     if config.array.num_elements != 7 or config.array.geometry != "hexagonal_7":
         raise ValueError("Esta version implementa una CRPA hexagonal de 7 elementos.")
-    if config.array.element_spacing_over_lambda <= 0:
-        raise ValueError("element_spacing_over_lambda debe ser > 0.")
+    if config.array.element_spacing_m <= 0:
+        raise ValueError("element_spacing_m debe ser > 0.")
     if config.signal.speed_of_light_m_s <= 0:
         raise ValueError("speed_of_light_m_s debe ser > 0.")
     if config.signal.sample_rate_hz <= 0:
@@ -134,6 +134,7 @@ def validate_project_config(config: ProjectConfig) -> None:
             raise ValueError(f"azimuth_deg de {template.name} debe estar en [0, 360].")
         if not (0.0 <= template.elevation_deg <= 90.0):
             raise ValueError(f"elevation_deg de {template.name} debe estar en [0, 90].")
+
 
 def save_config_used(config: ProjectConfig, output_dir: Path) -> None:
     """Guarda una copia JSON de la configuracion usada.

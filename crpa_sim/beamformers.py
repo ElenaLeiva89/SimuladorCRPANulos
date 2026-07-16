@@ -10,7 +10,8 @@ import numpy as np
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
 from .covariance import compute_sample_covariance, invert_covariance
-from .jammers import jammer_center_frequency_hz
+# from .jammers import jammer_center_frequency_hz
+from .jammers import jammer_wavelength_m
 
 
 def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
@@ -76,8 +77,9 @@ def compute_lcmv_weights(
 
     for jammer in jammer_list:
         #steering_vectors.append(steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))
-        f_jam_hz = jammer_center_frequency_hz(config, jammer)
-        lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        # f_jam_hz = jammer_center_frequency_hz(config, jammer)
+        # lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        lambda_jam_m = jammer_wavelength_m(config, jammer)
         steering_vectors.append(
             steering_vector(
                 config,
@@ -137,8 +139,9 @@ def compute_lcmvq_weights(
         #     jammer.azimuth_deg,
         #     jammer.elevation_deg,
         # )
-        f_jam_hz = jammer_center_frequency_hz(config, jammer)
-        lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        # f_jam_hz = jammer_center_frequency_hz(config, jammer)
+        # lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
+        lambda_jam_m = jammer_wavelength_m(config, jammer)
         a_jam = steering_vector(
             config,
             element_positions_m,
