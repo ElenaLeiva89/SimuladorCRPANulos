@@ -2,7 +2,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from crpa_sim.config import JammerInstance
-from crpa_sim.jammers import build_jammer_case, generate_complex_noise, generate_jammer_baseband_signal, generate_received_snapshot_matrix, jammer_power_from_jnr
+from crpa_sim.jammers import build_jammer_case, generate_complex_noise, generate_jammer_baseband_signal, generate_received_snapshot_matrix, jammer_center_frequency_hz, jammer_power_from_jnr, jammer_wavelength_m
 
 def test_jammer_power_noise_and_signals(project_config, rng):
     """Comprueba potencia JNR, ruido y tipos de senal jammer.
@@ -15,7 +15,7 @@ def test_jammer_power_noise_and_signals(project_config, rng):
     noise = generate_complex_noise(project_config, rng)
     assert noise.shape == (project_config.array.num_elements, project_config.signal.num_snapshots)
     assert np.iscomplexobj(noise)
-    tone = JammerInstance("J", 40, 10, 30, "tone", 0.05)
+    tone = JammerInstance("J", 40, 10, 30, "tone", normalized_frequency=0.05)
     s = generate_jammer_baseband_signal(tone, 128, 4.0, rng)
     assert np.allclose(np.abs(s), 2.0)
     assert generate_jammer_baseband_signal(tone, 0, 4.0, rng).shape == (0,)
@@ -148,3 +148,18 @@ def test_chirp_without_frequency_raises_value_error(rng):
     chirp = JammerInstance("C", 0, 0, 30, "chirp", chirp_frequency=None)
     with pytest.raises(ValueError, match="chirp_frequency"):
         generate_jammer_baseband_signal(chirp, 16, 1.0, rng)
+
+
+def test_jammer_center_frequency_and_wavelength(project_config):
+    """Comprueba frecuencia RF explicita y derivada desde frecuencia normalizada."""
+    derived = JammerInstance("D", 0.0, 10.0, 20.0, "tone", normalized_frequency=0.25)
+    expected = project_config.signal.carrier_frequency_hz + 0.25 * project_config.signal.sample_rate_hz
+    assert jammer_center_frequency_hz(project_config, derived) == pytest.approx(expected)
+    assert jammer_wavelength_m(project_config, derived) == pytest.approx(project_config.signal.speed_of_light_m_s / expected)
+
+    explicit = JammerInstance("E", 0.0, 10.0, 20.0, "tone", center_frequency_hz=1.56e9, normalized_frequency=0.25)
+    assert jammer_center_frequency_hz(project_config, explicit) == pytest.approx(1.56e9)
+
+    bad = JammerInstance("BAD", 0.0, 10.0, 20.0, "tone", center_frequency_hz=0.0)
+    with pytest.raises(ValueError, match="frecuencia central"):
+        jammer_center_frequency_hz(project_config, bad)

@@ -7,20 +7,23 @@ import pandas as pd
 import pytest
 
 from main import run_project
-from conftest import write_config_json
+from conftest import write_config_json, write_synthetic_measured_mat_files
 
 
-MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
-
-
-def _with_steering_model(config, steering_model):
-    measured_file = MEASURED_STEERING_FILE if steering_model == "measured" else None
+def _with_steering_model(config, steering_model, tmp_path):
+    phase_file = None
+    amplitude_file = None
+    if steering_model == "measured":
+        phase_path, amplitude_path = write_synthetic_measured_mat_files(tmp_path)
+        phase_file = str(phase_path)
+        amplitude_file = str(amplitude_path)
     return replace(
         config,
         array=replace(
             config.array,
             steering_model=steering_model,
-            measured_steering_file=measured_file,
+            measured_phase_mat_file=phase_file,
+            measured_amplitude_mat_file=amplitude_file,
         ),
     )
 
@@ -69,7 +72,7 @@ def test_run_project_resolves_output_dir_template(fast_config, tmp_path):
 
 @pytest.mark.parametrize("steering_model", ["ideal", "measured"])
 @pytest.mark.parametrize("doa_mode", ["fixed", "variable"])
-@pytest.mark.parametrize("algorithm", ["lcmv", "power_inversion"])
+@pytest.mark.parametrize("algorithm", ["lcmv", "lcmvq", "power_inversion"])
 def test_run_project_supports_steering_doa_algorithm_combinations(
     steering_model,
     doa_mode,
@@ -86,7 +89,7 @@ def test_run_project_supports_steering_doa_algorithm_combinations(
         fast_config: Configuracion ligera de simulacion.
         tmp_path: Directorio temporal de pytest.
     """
-    base = _with_steering_model(fast_config, steering_model)
+    base = _with_steering_model(fast_config, steering_model, tmp_path)
     cfg = replace(
         base,
         signal=replace(base.signal, num_snapshots=64, fft_size=64),
@@ -131,7 +134,7 @@ def test_run_project_supports_steering_doa_algorithm_combinations(
     assert metrics["null_depth_dB"].notna().all()
 
 
-@pytest.mark.parametrize("algorithm", ["lcmv", "power_inversion"])
+@pytest.mark.parametrize("algorithm", ["lcmv", "lcmvq", "power_inversion"])
 def test_run_project_variable_doa_creates_metrics_for_each_montecarlo(algorithm, fast_config, tmp_path):
     """Ejecuta DoA variable end-to-end con cada algoritmo soportado.
 

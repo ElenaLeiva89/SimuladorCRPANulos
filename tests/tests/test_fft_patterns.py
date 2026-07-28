@@ -6,9 +6,6 @@ from crpa_sim.fft_tools import temporal_psd_snapshot_matrix
 from crpa_sim.patterns import compute_2d_response_grid, compute_azimuth_response_cut, compute_elevation_response_cut, conventional_weights, evaluate_response_for_angles, make_scan_vectors
 
 
-MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
-
-
 def test_psd_size_and_tone_detection(rng):
     """Verifica tamano de PSD y localizacion de un tono sintetico.
 
@@ -63,19 +60,15 @@ def test_patterns(project_config, element_positions_m):
     assert scan_el[-1] >= project_config.scan.elevation_scan_max_deg
 
 
-def test_2d_grid_uses_measured_steering_path(project_config, element_positions_m):
+def test_2d_grid_uses_measured_steering_path(measured_project_config, element_positions_m):
     """Comprueba la rama medida de malla 2D con steering medido.
 
     Parametros:
-        project_config: Configuracion base de simulacion.
+        measured_project_config: Configuracion con MAT sinteticos.
         element_positions_m: Posiciones XYZ del array.
     """
-    measured = replace(
-        project_config,
-        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
-    )
-    w = conventional_weights(project_config, element_positions_m)
-    grid = compute_2d_response_grid(measured, element_positions_m, w, np.array([0.0]), np.array([90.0]))
+    w = conventional_weights(measured_project_config, element_positions_m)
+    grid = compute_2d_response_grid(measured_project_config, element_positions_m, w, np.array([0.0]), np.array([45.0]))
     assert grid["response_abs"].shape == (1, 1)
     assert np.isfinite(grid["response_power_dB"]).all()
 

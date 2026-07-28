@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -144,6 +145,31 @@ def test_main_run_project_light(config_json_path):
     assert (out / "output_data" / "matrices_complex.npz").exists()
     assert (out / "output_data" / "jammer_cuts").exists()
     assert list((out / "output_data" / "jammer_cuts").glob("*.csv"))
+
+
+def test_update_steering_configuration_writes_cli_selection(config_json_path, tmp_path):
+    """Comprueba la actualizacion del JSON hecha por la CLI."""
+    from main import update_steering_configuration
+
+    phase_path = tmp_path / "TABLASFASE_E1_C_TEST.mat"
+    amplitude_path = tmp_path / "TABLASAMPL_E1_C_TEST.mat"
+    phase_path.write_text("phase", encoding="utf-8")
+    amplitude_path.write_text("amplitude", encoding="utf-8")
+
+    update_steering_configuration(config_json_path, "measured", phase_path, amplitude_path)
+    raw = json.loads(config_json_path.read_text(encoding="utf-8"))
+    assert raw["array_config"]["steering_model"] == "measured"
+    assert raw["array_config"]["measured_phase_mat_file"] == str(phase_path.resolve())
+    assert raw["array_config"]["measured_amplitude_mat_file"] == str(amplitude_path.resolve())
+
+    update_steering_configuration(config_json_path, "ideal", None, None)
+    raw = json.loads(config_json_path.read_text(encoding="utf-8"))
+    assert raw["array_config"]["steering_model"] == "ideal"
+    assert raw["array_config"]["measured_phase_mat_file"] is None
+    assert raw["array_config"]["measured_amplitude_mat_file"] is None
+
+    with pytest.raises(ValueError, match="measured"):
+        update_steering_configuration(config_json_path, "measured", phase_path, None)
 
 def test_global_outputs_save_npz_without_csv(project_config, element_positions_m, rng, tmp_path):
     """Verifica que los NPZ se guardan aunque CSV este desactivado.

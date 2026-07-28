@@ -75,6 +75,23 @@ def validate_project_config(config: ProjectConfig) -> None:
         raise ValueError("Esta version implementa una CRPA hexagonal de 7 elementos.")
     if config.array.element_spacing_m <= 0:
         raise ValueError("element_spacing_m debe ser > 0.")
+    if config.array.steering_model not in {"ideal", "measured"}:
+        raise ValueError("steering_model debe ser 'ideal' o 'measured'.")
+    if config.array.steering_model == "measured":
+        if not config.array.measured_phase_mat_file:
+            raise ValueError("steering_model='measured' requiere \"array_config.measured_phase_mat_file.")
+        if not config.array.measured_amplitude_mat_file:
+            raise ValueError("steering_model='measured' requiere \"array_config.measured_amplitude_mat_file.")
+        phase_path = Path(config.array.measured_phase_mat_file)
+        amplitude_path = Path(config.array.measured_amplitude_mat_file)
+        if not phase_path.is_absolute():
+            phase_path = Path.cwd() / phase_path
+        if not amplitude_path.is_absolute():
+            amplitude_path = Path.cwd() / amplitude_path
+        if not phase_path.exists():
+            raise FileNotFoundError(f"No se encontró el fichero MAT de fase: {phase_path}")
+        if not amplitude_path.exists():
+            raise FileNotFoundError(f"No se encontró el fichero MAT de amplitud: {amplitude_path}")
     if config.signal.speed_of_light_m_s <= 0:
         raise ValueError("speed_of_light_m_s debe ser > 0.")
     if config.signal.sample_rate_hz <= 0:

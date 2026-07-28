@@ -27,10 +27,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import csv
-
 import numpy as np
-
 from .config import ArrayConfig, ProjectConfig
+from .measured_mat import (
+    load_measured_steering_database,
+    measured_steering_vector,
+)
 
 
 @dataclass(frozen=True)
@@ -300,18 +302,57 @@ def measured_steering_matrix_for_angles(
     return output
 
 
+# def steering_vector_measured(
+#     config: ProjectConfig,
+#     azimuth_deg: float,
+#     elevation_deg: float,
+# ) -> np.ndarray:
+#     """Devuelve un steering vector medido para una direccion concreta."""
+#     return measured_steering_matrix_for_angles(
+#         config,
+#         np.asarray([azimuth_deg], dtype=float),
+#         np.asarray([elevation_deg], dtype=float),
+#     )[0]
+
 def steering_vector_measured(
     config: ProjectConfig,
     azimuth_deg: float,
     elevation_deg: float,
+    frequency_hz: float,
 ) -> np.ndarray:
-    """Devuelve un steering vector medido para una direccion concreta."""
-    return measured_steering_matrix_for_angles(
-        config,
-        np.asarray([azimuth_deg], dtype=float),
-        np.asarray([elevation_deg], dtype=float),
-    )[0]
+    """Devuelve steering medido para dirección y frecuencia concretas."""
 
+    phase_file = config.array.measured_phase_mat_file
+    amplitude_file = config.array.measured_amplitude_mat_file
+
+    if not phase_file or not amplitude_file:
+        raise ValueError("El modelo measured requiere los ficheros MAT de fase y amplitud.")
+
+    database = load_measured_steering_database(phase_file, amplitude_file,)
+    return measured_steering_vector(
+        database=database,
+        azimuth_deg=azimuth_deg,
+        elevation_deg=elevation_deg,
+        frequency_hz=frequency_hz,
+    )
+
+
+# def steering_vector(
+#     config: ProjectConfig,
+#     element_positions_m: np.ndarray,
+#     azimuth_deg: float,
+#     elevation_deg: float,
+#     wavelength_m: float | None = None,
+# ) -> np.ndarray:
+#     """Devuelve el steering vector segun el modelo configurado."""
+#     if wavelength_m is None:
+#         wavelength_m = config.signal.wavelength_m
+
+#     if config.array.steering_model == "ideal":
+#         return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m,)
+#     if config.array.steering_model == "measured":
+#         return steering_vector_measured(config, azimuth_deg, elevation_deg)
+#     raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
 
 def steering_vector(
     config: ProjectConfig,
@@ -320,12 +361,20 @@ def steering_vector(
     elevation_deg: float,
     wavelength_m: float | None = None,
 ) -> np.ndarray:
-    """Devuelve el steering vector segun el modelo configurado."""
+    """Devuelve el steering ideal o medido para una frecuencia concreta."""
+
     if wavelength_m is None:
         wavelength_m = config.signal.wavelength_m
 
+    if wavelength_m <= 0.0:
+        raise ValueError("wavelength_m debe ser mayor que cero.")
+
     if config.array.steering_model == "ideal":
         return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m,)
+
     if config.array.steering_model == "measured":
-        return steering_vector_measured(config, azimuth_deg, elevation_deg)
-    raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
+        frequency_hz = (config.signal.speed_of_light_m_s / wavelength_m)
+
+        return steering_vector_measured(config=config, azimuth_deg=azimuth_deg, elevation_deg=elevation_deg, frequency_hz=frequency_hz,)
+
+    raise ValueError(f"Modelo steering no soportado: "f"{config.array.steering_model}")

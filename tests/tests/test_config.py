@@ -22,9 +22,10 @@ def test_from_dict_validation_and_properties(project_config):
     Parametros:
         project_config: Configuracion base de simulacion.
     """
-    array = ArrayConfig.from_dict({"num_elements": "7", "geometry": "HEXAGONAL_7", "element_type": "ISOTROPIC", "element_spacing_over_lambda": 0.5, "array_boresight_elevation_deg": 90, "steering_model": "IDEAL"})
+    array = ArrayConfig.from_dict({"num_elements": "7", "geometry": "HEXAGONAL_7", "element_type": "ISOTROPIC", "element_spacing_m": 0.095, "array_boresight_elevation_deg": 90, "steering_model": "IDEAL"})
     assert array.geometry == "hexagonal_7"
     assert array.element_type == "isotropic"
+    assert array.element_spacing_m == pytest.approx(0.095)
     signal = SignalConfig("E1", 299792458.0, 64e6, 1024, 2048)
     assert signal.carrier_frequency_hz == GNSS_CARRIER_FREQUENCIES_HZ["E1"]
     assert signal.wavelength_m > 0
@@ -50,11 +51,11 @@ def test_valid_config_parsing():
         No recibe parametros.
     """
     sim = SimulationConfig.from_dict({"num_montecarlo": "2", "doa_mode": "VARIABLE"})
-    bf = BeamformingConfig.from_dict({"algorithm": "LCMV", "desired_azimuth_deg": 0, "desired_elevation_deg": 90, "diagonal_loading_factor": 0.001, "power_inversion_reference_element": "0"})
+    bf = BeamformingConfig.from_dict({"algorithm": "LCMVQ", "desired_azimuth_deg": 0, "desired_elevation_deg": 90, "diagonal_loading_factor": 0.001, "power_inversion_reference_element": "0"})
     jam = JammerConfig.from_dict({"num_jammers": "1", "jnr_dB": "40", "variable_doa_azimuth_range_deg": ["0", "360"], "variable_doa_elevation_range_deg": ["5", "85"], "base_jammers": [{"name": "J1", "azimuth_deg": 40, "elevation_deg": 10, "signal_type": "TONE"}]})
     assert sim.num_montecarlo == 2
     assert sim.doa_mode == "variable"
-    assert bf.algorithm == "lcmv"
+    assert bf.algorithm == "lcmvq"
     assert jam.base_jammers[0].signal_type == "tone"
 
 
@@ -102,7 +103,7 @@ def test_validate_project_config_rejects_physical_invalid_ranges(project_config)
         project_config: Configuracion base de simulacion.
     """
     invalid_configs = [
-        replace(project_config, array=replace(project_config.array, element_spacing_over_lambda=0.0)),
+        replace(project_config, array=replace(project_config.array, element_spacing_m=0.0)),
         replace(project_config, signal=replace(project_config.signal, speed_of_light_m_s=0.0)),
         replace(project_config, signal=replace(project_config.signal, sample_rate_hz=0.0)),
         replace(project_config, signal=replace(project_config.signal, num_snapshots=0)),

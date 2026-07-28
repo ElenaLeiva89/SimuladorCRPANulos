@@ -29,7 +29,12 @@ def test_direction_unit_vector_is_unit_norm_and_zenith_points_z():
 def test_zenith_steering_vector_is_all_ones_for_planar_array(base_config):
     ideal_config = replace(
         base_config,
-        array=replace(base_config.array, steering_model="ideal", measured_steering_file=None),
+        array=replace(
+            base_config.array,
+            steering_model="ideal",
+            measured_phase_mat_file=None,
+            measured_amplitude_mat_file=None,
+        ),
     )
     positions = create_crpa_geometry(ideal_config.array, ideal_config.element_spacing_m)
     a = steering_vector(ideal_config, positions, azimuth_deg=0.0, elevation_deg=90.0)

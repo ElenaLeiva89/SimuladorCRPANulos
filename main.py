@@ -14,11 +14,11 @@ algoritmo (`power_inversion` o `lcmv`) por ejecucion.
 from __future__ import annotations
 
 from pathlib import Path
-
+import argparse
+import json
 import numpy as np
 import pandas as pd
 
-from crpa_sim import config
 from crpa_sim.array_model import create_crpa_geometry
 from crpa_sim.beamformers import compute_weights
 from crpa_sim.config import JammerInstance, ProjectConfig
@@ -301,6 +301,58 @@ def _save_jammer_plots(
     # )
 
 
+def parse_command_line() -> argparse.Namespace:
+    """Lee los parámetros usados para seleccionar el modelo de steering."""
+
+    parser = argparse.ArgumentParser(description="Simulador CRPA de nullforming y beamforming.")
+    parser.add_argument("--config", type=Path, default=Path("input_config.json"), help="Ruta del fichero JSON de configuración.",)
+    parser.add_argument("--steering-model", choices=("ideal", "measured"), required=True, help="Modelo de steering utilizado durante la simulación.",)
+    parser.add_argument("--phase-mat", type=Path, default=None, help=( "Fichero MAT con TablasAOAFase. Obligatorio cuando --steering-model measured."),)
+    parser.add_argument("--amplitude-mat", type=Path, default=None, help=("Fichero MAT con TablasAOAAmpli. Obligatorio cuando --steering-model measured."),)
+    args = parser.parse_args()
+    if args.steering_model == "measured":
+        if args.phase_mat is None:
+            parser.error("--phase-mat es obligatorio en modo measured.")
+        if args.amplitude_mat is None:
+            parser.error("--amplitude-mat es obligatorio en modo measured.")
+
+    return args
+
+
+def update_steering_configuration(
+    config_path: Path,
+    steering_model: str,
+    phase_mat: Path | None,
+    amplitude_mat: Path | None,
+) -> None:
+    """Actualiza en el JSON el modelo y los ficheros de steering medido."""
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"No se encontró el fichero de configuración: {config_path}")
+
+    with open(config_path, "r", encoding="utf-8") as file:
+        raw_config = json.load(file)
+
+    array_config = raw_config.setdefault("array_config", {})
+    array_config["steering_model"] = steering_model
+
+    if steering_model == "measured":
+        if phase_mat is None or amplitude_mat is None:
+            raise ValueError("El modelo measured necesita los dos ficheros MAT.")
+
+        # Guardamos rutas resueltas para evitar problemas con el directorio
+        # desde el que se ejecute posteriormente el programa.
+        array_config["measured_phase_mat_file"] = str(phase_mat.resolve())
+        array_config["measured_amplitude_mat_file"] = str(amplitude_mat.resolve())
+    else:
+        # En modo ideal no se utilizan las tablas medidas.
+        array_config["measured_phase_mat_file"] = None
+        array_config["measured_amplitude_mat_file"] = None
+    with open(config_path, "w", encoding="utf-8") as file:
+        json.dump(raw_config, file, indent=2, ensure_ascii=False)
+        file.write("\n")
+
+
 def run_project(config_path: Path = Path("input_config.json")) -> None:
     """Ejecuta la simulacion completa a partir de un fichero JSON.
 
@@ -417,4 +469,13 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
 
 
 if __name__ == "__main__":
-    run_project(Path("input_config.json"))
+    args = parse_command_line()
+
+    update_steering_configuration(
+        config_path=args.config,
+        steering_model=args.steering_model,
+        phase_mat=args.phase_mat,
+        amplitude_mat=args.amplitude_mat,
+    )
+
+    run_project(args.config)

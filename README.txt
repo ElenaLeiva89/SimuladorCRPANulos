@@ -1,106 +1,126 @@
-# Simulador CRPA ideal de 7 elementos para Nullforming/Beamforming
+# Simulador CRPA de 7 elementos para nullforming y beamforming
 
-Este proyecto simula una antena CRPA ideal de 7 elementos en geometría
-hexagonal, orientada al cenit, para estudiar formación de haces y generación
-de nulos frente a interferencias GNSS. El simulador genera ruido, jammers,
-snapshots complejos, pesos adaptativos y métricas de profundidad, anchura y
-área de nulo.
+Este proyecto simula una antena CRPA de 7 elementos en geometria hexagonal
+para estudiar formacion de haces y generacion de nulos frente a interferencias
+GNSS. El simulador genera ruido, jammers, snapshots complejos, pesos
+adaptativos y metricas de profundidad, anchura y area de nulo.
 
-La versión actual ejecuta una combinación concreta por corrida:
+La version actual ejecuta una combinacion concreta por corrida:
 
-- un único modo DoA: `fixed` o `variable`;
-- un único algoritmo de beamforming: `power_inversion` o `lcmv`;
-- un valor común de JNR para todos los jammers activos;
-- una CRPA ideal hexagonal de 7 elementos.
+- un modo DoA: `fixed` o `variable`;
+- un algoritmo: `power_inversion`, `lcmv` o `lcmvq`;
+- un modelo de steering: `ideal` o `measured`;
+- un valor comun de JNR para todos los jammers activos;
+- una geometria CRPA hexagonal de 7 elementos.
 
-## Flujo de ejecución
+## Flujo de ejecucion
 
-`main.py` ejecuta la simulación completa:
+`main.py` ejecuta la simulacion completa:
 
-1. Lee `input_config.json`.
-2. Valida rangos físicos y opciones soportadas.
-3. Construye la geometría CRPA con `crpa_sim/array_model.py`.
+1. Lee y actualiza el JSON de configuracion seleccionado.
+2. Valida rangos fisicos y opciones soportadas.
+3. Construye la geometria CRPA con `crpa_sim/array_model.py`.
 4. Genera jammers y ruido con `crpa_sim/jammers.py`.
 5. Calcula la matriz de snapshots recibidos `X`.
-6. Estima la covarianza espacial `R = X X^H / L`.
-7. Calcula pesos con `power_inversion` o `lcmv`.
-8. Evalúa cortes azimut/elevación y malla 2D del patrón.
-9. Calcula métricas de nulo por jammer, umbral y Monte Carlo.
-10. Guarda logs, CSV, NPZ y figuras según `output_config`.
+6. Estima la covarianza espacial `R = X X^H / L` cuando el algoritmo la usa.
+7. Calcula pesos con `power_inversion`, `lcmv` o `lcmvq`.
+8. Evalua cortes azimut/elevacion y mallas 2D del patron.
+9. Calcula metricas de nulo por jammer, umbral y Monte Carlo.
+10. Guarda logs, CSV, NPZ y figuras segun `output_config`.
 
-## Instalación y ejecución
+## Instalacion
 
-Dependencias mínimas:
-
-```bash
-pip install numpy pandas matplotlib
-```
-
-Ejecución normal desde la raíz del proyecto:
+Dependencias minimas:
 
 ```bash
-python main.py
+python -m pip install numpy pandas matplotlib scipy
 ```
 
-La configuración usada por defecto es:
+Dependencias de desarrollo y tests:
 
-```text
-input_config.json
+```bash
+python -m pip install -r tests/requirements-dev.txt
 ```
+
+## Ejecucion
+
+La CLI exige seleccionar explicitamente el modelo de steering.
+
+Modo ideal:
+
+```bash
+python main.py --steering-model ideal
+```
+
+Modo medido desde tablas MATLAB:
+
+```bash
+python main.py --steering-model measured --phase-mat data/TABLASFASE_E1_C_LBADICIONALES_ALT.mat --amplitude-mat data/TABLASAMPL_E1_C_LBADICIONALES_ALT.mat
+```
+
+Con un JSON alternativo:
+
+```bash
+python main.py --config input_config.json --steering-model ideal
+```
+
+Notas importantes:
+
+- `--steering-model measured` requiere siempre `--phase-mat` y
+  `--amplitude-mat`.
+- Antes de lanzar la simulacion, la CLI actualiza `array_config` dentro del
+  JSON indicado: escribe `steering_model` y, en modo medido, las rutas
+  absolutas de los dos MAT.
+- En modo ideal, la CLI deja los campos MAT a `null`.
 
 ## Estructura del proyecto
 
 ```text
-main.py                         Orquestación de la simulación.
-input_config.json               Configuración principal de entrada.
-README.txt                      Documentación del proyecto.
+main.py                         Orquestacion de la simulacion.
+input_config.json               Configuracion principal de entrada.
+README.txt                      Documentacion del proyecto.
 
 crpa_sim/
-  array_model.py                Geometría CRPA y steering vectors.
-  beamformers.py                Pesos Power Inversion y LCMV.
-  config.py                     Dataclasses y normalización del JSON.
-  covariance.py                 Covarianza, diagonal loading e inversión.
+  array_model.py                Geometria CRPA y steering vectors.
+  beamformers.py                Pesos Power Inversion, LCMV y LCMVQ.
+  config.py                     Dataclasses y normalizacion del JSON.
+  covariance.py                 Covarianza, diagonal loading e inversion.
   fft_tools.py                  PSD temporal media de snapshots.
-  io_utils.py                   Carga, validación y guardado de artefactos.
-  jammers.py                    Ruido, señales jammer y matriz recibida.
-  null_metrics.py               Profundidad, anchura y área de nulos.
-  patterns.py                   Cortes y mallas de patrón espacial.
-  plots.py                      Figuras de geometría, patrones y espectro.
+  io_utils.py                   Carga, validacion y guardado de artefactos.
+  jammers.py                    Ruido, senales jammer y matriz recibida.
+  measured_mat.py               Lectura de tablas MAT medidas.
+  null_metrics.py               Profundidad, anchura y area de nulos.
+  patterns.py                   Cortes y mallas de patron espacial.
+  plots.py                      Figuras de geometria, patrones y espectro.
 
 tests/
-  pytest.ini                    Configuración de pytest.
+  pytest.ini                    Configuracion de pytest.
   requirements-dev.txt          Dependencias de desarrollo.
   README_TESTS.md               Resumen del banco de pruebas.
-  tests/                        Tests unitarios e integración ligera.
+  tests/                        Tests unitarios e integracion ligera.
 ```
 
-## Especificación del modelo
+## Modelo de array
 
-### Array CRPA
-
-- Geometría soportada: `hexagonal_7`.
-- Número de elementos soportado: `7`.
+- Geometria soportada: `hexagonal_7`.
+- Numero de elementos soportado: `7`.
 - Elemento 1: centro del array.
 - Elementos 2 a 7: anillo hexagonal exterior.
 - Plano del array: `XY`.
-- Boresight esperado: elevación `90.0` grados.
-- Steering soportado: `ideal` isotropico y `measured` desde CSV real.
+- Boresight esperado: elevacion `90.0` grados.
+- Separacion fisica radial: `array_config.element_spacing_m`.
+- Steering soportado: `ideal` analitico y `measured` desde MAT de fase y
+  amplitud.
 
-La separación física se calcula como:
+### Convencion angular
 
-```text
-element_spacing_m = element_spacing_over_lambda * wavelength_m
-```
-
-### Convención angular
-
-- `azimuth_deg = 0`: dirección `+X`.
+- `azimuth_deg = 0`: direccion `+X`.
 - El azimut crece hacia `+Y`.
 - `elevation_deg = 0`: horizonte.
 - `elevation_deg = 90`: cenit.
 - Los barridos configurados usan azimut `[0, 360]` y elevacion `[0, 90]`.
 
-### Señal GNSS
+### Senal GNSS
 
 Bandas soportadas:
 
@@ -110,7 +130,7 @@ E6: 1.27875e9 Hz
 E1: 1.57542e9 Hz
 ```
 
-También se admiten códigos históricos:
+Tambien se admiten codigos historicos:
 
 ```text
 1 -> E5
@@ -118,15 +138,58 @@ También se admiten códigos históricos:
 3 -> E1
 ```
 
-La longitud de onda se calcula como:
+La longitud de onda GNSS se calcula como:
 
 ```text
 wavelength_m = speed_of_light_m_s / carrier_frequency_hz
 ```
 
-### Jammers
+## Steering medido
 
-Tipos de señal soportados en `base_jammers[].signal_type`:
+El modelo `measured` usa dos ficheros MATLAB:
+
+- `measured_phase_mat_file`: tabla de fase con `TablasAOAFase`.
+- `measured_amplitude_mat_file`: tabla de amplitud con `TablasAOAAmpli`.
+
+Variables esperadas en el MAT de fase:
+
+```text
+TablasAOAFase
+FRECSTAB_MHz
+AOAsTab_Grad
+ELEVSTAB_GRAD
+NBITSFASE
+NBITSREGI
+```
+
+Variables esperadas en el MAT de amplitud:
+
+```text
+TablasAOAAmpli
+FRECSTAB_MHz
+AOAsTab_Grad
+ELEVSTAB_GRAD
+MINDIFPA
+PASODIFAMP
+```
+
+Ambos ficheros deben compartir ejes de azimut, elevacion y frecuencia, y el
+nombre debe incluir la misma polarizacion mediante `_C_`, `_V_` o `_H_`.
+
+Las tablas originales contienen 12 diferencias entre antenas. Para
+beamforming se usan las seis primeras, correspondientes a las diferencias de
+los elementos 2..7 respecto al elemento central. El elemento central se toma
+como referencia de amplitud 1 y fase 0.
+
+La seleccion angular usa vecino mas cercano en azimut/elevacion. La frecuencia
+se interpola linealmente entre las dos muestras medidas mas cercanas:
+
+- amplitud en dB con interpolacion lineal;
+- fase por el camino angular mas corto para evitar saltos en +/-180 grados.
+
+## Jammers
+
+Tipos de senal soportados en `base_jammers[].signal_type`:
 
 - `tone`: tono complejo con frecuencia normalizada.
 - `complex_gaussian`: interferencia compleja gaussiana circular.
@@ -138,28 +201,48 @@ La potencia lineal de cada jammer se calcula a partir del JNR:
 jammer_power_linear = noise_power_linear * 10^(jnr_dB / 10)
 ```
 
-Para `chirp`, `chirp_frequency` es obligatorio y debe estar expresado como
-frecuencia normalizada en ciclos por muestra.
+Frecuencia RF de cada jammer:
 
-### Algoritmos de beamforming
+- si `center_frequency_hz` existe, se usa directamente;
+- si no existe, se deriva como
+  `carrier_frequency_hz + normalized_frequency * sample_rate_hz`.
+
+La longitud de onda usada para steering, patrones y metricas de ese jammer se
+calcula desde su frecuencia RF central. Esto permite evaluar jammers fuera de
+la portadora GNSS nominal.
+
+Para `chirp`, `chirp_frequency` es obligatorio y el generador actual lo trata
+como frecuencia normalizada en ciclos por muestra. El campo `bandwidth_hz`
+permanece reservado para modelos futuros.
+
+## Algoritmos
 
 `power_inversion`:
 
-- Estima la covarianza espacial a partir de `snapshot_matrix`.
-- Aplica diagonal loading.
-- Invierte con pseudoinversa.
-- Fuerza una restricción sobre `power_inversion_reference_element`.
+- estima la covarianza espacial a partir de `snapshot_matrix`;
+- aplica diagonal loading;
+- invierte con pseudoinversa;
+- fuerza una restriccion sobre `power_inversion_reference_element`.
 
 `lcmv`:
 
-- Fuerza ganancia unitaria en la dirección deseada.
-- Fuerza nulos en las direcciones de los jammers.
-- Requiere como máximo `num_elements - 1` jammers.
+- estima la covarianza espacial;
+- fuerza ganancia unitaria en la direccion deseada;
+- fuerza nulos en las direcciones y frecuencias RF de los jammers;
+- requiere como maximo `num_elements - 1` jammers.
+
+`lcmvq`:
+
+- usa restricciones geometricas sin covarianza;
+- fuerza una restriccion sobre el elemento central;
+- fuerza ganancia unitaria en la direccion deseada;
+- fuerza nulos en las direcciones y frecuencias RF de los jammers.
 
 Los pesos convencionales `delay-and-sum` se calculan en `patterns.py` para
-comparativas internas, pero no son un algoritmo seleccionable en el JSON.
+comparativas internas y plots, pero no son un algoritmo seleccionable en el
+JSON.
 
-## Configuración completa
+## Configuracion
 
 El fichero `input_config.json` contiene los siguientes bloques.
 
@@ -170,22 +253,13 @@ El fichero `input_config.json` contiene los siguientes bloques.
   "num_elements": 7,
   "geometry": "hexagonal_7",
   "element_type": "isotropic",
-  "element_spacing_over_lambda": 0.5,
+  "element_spacing_m": 0.095,
   "array_boresight_elevation_deg": 90.0,
-  "steering_model": "ideal",
-  "measured_steering_file": "data/crpa_measured_steering.csv"
+  "steering_model": "measured",
+  "measured_phase_mat_file": "data/TABLASFASE_E1_C_LBADICIONALES_ALT.mat",
+  "measured_amplitude_mat_file": "data/TABLASAMPL_E1_C_LBADICIONALES_ALT.mat"
 }
 ```
-
-Variables:
-
-- `num_elements`: debe ser `7`.
-- `geometry`: debe ser `hexagonal_7`.
-- `element_type`: actualmente informativo, se usa `isotropic`.
-- `element_spacing_over_lambda`: separación radial en longitudes de onda.
-- `array_boresight_elevation_deg`: debe ser `90.0`.
-- `steering_model`: `ideal` o `measured`.
-- `measured_steering_file`: ruta CSV obligatoria cuando `steering_model = measured`.
 
 ### `signal_config`
 
@@ -199,14 +273,6 @@ Variables:
 }
 ```
 
-Variables:
-
-- `gnss_band`: `E1`, `E5`, `E6`, o códigos `1`, `2`, `3`.
-- `speed_of_light_m_s`: velocidad de la luz, debe ser mayor que cero.
-- `sample_rate_hz`: frecuencia de muestreo, debe ser mayor que cero.
-- `num_snapshots`: número de muestras temporales por canal.
-- `fft_size`: tamaño de FFT; puede ser `null` para usar `num_snapshots`.
-
 ### `simulation_config`
 
 ```json
@@ -216,25 +282,17 @@ Variables:
 }
 ```
 
-Variables:
-
-- `num_montecarlo`: número de iteraciones, debe ser al menos `1`.
-- `doa_mode`: `fixed` o `variable`.
-
-En modo `fixed`, cada jammer usa el azimut/elevación de su plantilla. En modo
-`variable`, cada iteración sortea las direcciones dentro de los rangos
-configurados.
-
-El simulador usa un generador aleatorio nuevo sin semilla configurada en cada
-iteracion Monte Carlo. Por tanto, el ruido, las fases iniciales de los jammers
-y las DoA variables son estocasticos y no se reproducen exactamente entre
+En modo `fixed`, cada jammer usa el azimut/elevacion de su plantilla. En modo
+`variable`, cada iteracion sortea las direcciones dentro de los rangos
+configurados. El programa crea generadores aleatorios nuevos sin semilla de
+configuracion, por lo que los resultados no son bit a bit reproducibles entre
 ejecuciones.
 
 ### `beamforming_config`
 
 ```json
 {
-  "algorithm": "power_inversion",
+  "algorithm": "lcmvq",
   "desired_azimuth_deg": 0.0,
   "desired_elevation_deg": 90.0,
   "diagonal_loading_factor": 0.001,
@@ -242,17 +300,10 @@ ejecuciones.
 }
 ```
 
-Variables:
+`algorithm` admite `power_inversion`, `lcmv` o `lcmvq`.
 
-- `algorithm`: `power_inversion` o `lcmv`.
-- `desired_azimuth_deg`: azimut de la dirección deseada.
-- `desired_elevation_deg`: elevación de la dirección deseada.
-- `diagonal_loading_factor`: factor de regularización, debe ser `>= 0`.
-- `power_inversion_reference_element`: índice del elemento de referencia.
-
-Nota: el código usa índices Python de base cero. Por tanto, el elemento central
-normalmente es `0`. Si se configura `1`, se usa el segundo elemento del vector
-de posiciones.
+Nota: `power_inversion_reference_element` usa indices Python de base cero. El
+elemento central es `0`.
 
 ### `scan_config`
 
@@ -267,20 +318,10 @@ de posiciones.
   "null_thresholds_dB": [-10, -20, -30, -40, -50]
 }
 ```
-Los parametros de "azimuth_scan_step_deg": 0.5 y "elevation_scan_step_deg": 0.5 son valores 
-muy pequeños que permiten el calculo para la CRPA ideal pero que hacen muy complejo el calculo
-del steering vector de la CRPA real.
-Se recomienda asignar valores mas altos para la CRPA real y no realentizar el calculo.
 
-Variables:
-
-- `azimuth_scan_min_deg`: mínimo de azimut.
-- `azimuth_scan_max_deg`: máximo de azimut.
-- `azimuth_scan_step_deg`: paso de azimut, debe ser mayor que cero.
-- `elevation_scan_min_deg`: mínimo de elevación.
-- `elevation_scan_max_deg`: máximo de elevación.
-- `elevation_scan_step_deg`: paso de elevación, debe ser mayor que cero.
-- `null_thresholds_dB`: umbrales usados para medir anchura/área de nulo.
+Con steering medido, pasos muy finos pueden multiplicar el coste de lectura y
+evaluacion del patron. Conviene usar pasos mas grandes si la malla medida no
+justifica el sobremuestreo.
 
 ### `noise_config`
 
@@ -289,10 +330,6 @@ Variables:
   "noise_power_linear": 1.0
 }
 ```
-
-Variables:
-
-- `noise_power_linear`: potencia de ruido por canal en escala lineal.
 
 ### `jammer_config`
 
@@ -306,8 +343,9 @@ Variables:
     {
       "name": "Jammer_1",
       "azimuth_deg": 40.0,
-      "elevation_deg": 20.0,
+      "elevation_deg": 60.0,
       "signal_type": "tone",
+      "center_frequency_hz": 1578620000.0,
       "normalized_frequency": 0.05,
       "chirp_frequency": 0.05
     }
@@ -315,85 +353,48 @@ Variables:
 }
 ```
 
-Variables:
-
-- `num_jammers`: número de jammers activos. Debe cumplir
-  `1 <= num_jammers <= num_elements - 1`.
-- `jnr_dB`: relación jammer-ruido común para los jammers activos.
-- `variable_doa_azimuth_range_deg`: rango usado si `doa_mode = variable`.
-- `variable_doa_elevation_range_deg`: rango usado si `doa_mode = variable`.
-- `base_jammers`: lista de plantillas. Se usan las primeras `num_jammers`.
-
-Campos de cada jammer:
-
-- `name`: nombre usado en tablas y figuras.
-- `azimuth_deg`: azimut fijo si `doa_mode = fixed`. Rango de 0º a 360º
-- `elevation_deg`: elevación fija si `doa_mode = fixed`. Rango de 0º a 90º
-- `signal_type`: `tone`, `complex_gaussian` o `chirp`.
-- `normalized_frequency`: frecuencia del tono en ciclos por muestra.
-- `bandwidth_hz`: campo reservado para modelos futuros.
-- `chirp_frequency`: frecuencia central normalizada para `chirp`.
+`num_jammers` debe cumplir `1 <= num_jammers <= num_elements - 1` y no puede
+superar el numero de plantillas definidas en `base_jammers`.
 
 ### `output_config`
 
 ```json
 {
-  "output_dir": "results_{algorithm}_{doa_mode}_{steering_model}",
+  "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_1Jammers",
   "save_csv": true,
-  "save_npz": true,
+  "save_npz": false,
   "save_plots": true,
   "csv_separator": ";",
   "csv_decimal": ","
 }
 ```
 
-Variables:
-
-- `output_dir`: directorio raíz de resultados. Puede ser una ruta literal o
-  una plantilla con `{algorithm}`, `{doa_mode}` y `{steering_model}`.
-- `save_csv`: activa tablas CSV.
-- `save_npz`: activa matrices complejas comprimidas.
-- `save_plots`: activa figuras PNG.
-- `csv_separator`: separador de columnas.
-- `csv_decimal`: carácter decimal.
-
-Ejemplo de nombre dinámico de carpeta:
-
-```text
-results_{algorithm}_{doa_mode}_{steering_model}
-```
-
-Con `algorithm = lcmv`, `doa_mode = fixed` y `steering_model = ideal`,
-la salida se crea en:
-
-```text
-results_lcmv_fixed_ideal
-```
+`output_dir` puede incluir las claves dinamicas `{algorithm}`, `{doa_mode}` y
+`{steering_model}`.
 
 ## Salidas generadas
 
 En `output_dir`:
 
 ```text
-config_used.json                Copia exacta de la configuración parseada.
-run_log.txt                     Resumen textual de la ejecución.
-null_metrics_by_jammer.csv      Métricas por Monte Carlo, jammer y umbral.
-pattern_global_azimuth_dB.png   Corte global de azimut, si save_plots=true.
-pattern_global_elevation_dB.png Corte global de elevación, si save_plots=true.
-array_geometry.png              Geometría del array, si save_plots=true.
-array_factor_heatmap.png        Mapa 2D azimut/elevación, si save_plots=true.
-pattern_3d_comparison.png       Superficie 3D del patrón, si save_plots=true.
-temporal_psd_spectrum.png       PSD temporal media, si save_plots=true.
-jammer_plots/                   Cortes individuales por jammer.
+config_used.json                  Copia de la configuracion parseada.
+run_log.txt                       Resumen textual de la ejecucion.
+null_metrics_by_jammer.csv        Metricas por Monte Carlo, jammer y umbral.
+pattern_global_azimuth_dB.png     Corte global de azimut, si save_plots=true.
+pattern_global_elevation_dB.png   Corte global de elevacion, si save_plots=true.
+array_geometry.png                Geometria del array, si save_plots=true.
+pattern_3d_comparison.png         Superficie 3D del patron, si save_plots=true.
+temporal_psd_spectrum.png         PSD temporal media, si save_plots=true.
+jammer_plots/                     Cortes y heatmaps individuales por jammer.
 ```
 
 En `output_dir/output_data`, si corresponde:
 
 ```text
-element_positions_m.csv         Posiciones XYZ de los elementos.
-jammer_table.csv                Jammers generados en la primera iteración.
-matrices_complex.npz            Snapshots, covarianza y pesos complejos.
-jammer_cuts/                    Cortes azimut/elevación por jammer.
+element_positions_m.csv           Posiciones XYZ de los elementos.
+jammer_table.csv                  Jammers generados en la primera iteracion.
+matrices_complex.npz              Snapshots, covarianza y pesos complejos.
+jammer_cuts/                      Cortes azimut/elevacion por jammer.
 ```
 
 `matrices_complex.npz` contiene:
@@ -403,12 +404,12 @@ jammer_cuts/                    Cortes azimut/elevación por jammer.
 - `selected_weights`
 - `conventional_weights`
 
-## Métricas de nulo
+## Metricas de nulo
 
 `null_metrics_by_jammer.csv` contiene una fila por:
 
 ```text
-Monte Carlo x jammer x umbral de atenuación
+Monte Carlo x jammer x umbral de atenuacion
 ```
 
 Columnas principales:
@@ -420,6 +421,8 @@ Columnas principales:
 - `jammer_elevation_deg`
 - `jammer_jnr_dB`
 - `jammer_signal_type`
+- `jammer_center_frequency_hz`
+- `jammer_wavelength_m`
 - `null_depth_dB`
 - `attenuation_threshold_dB`
 - `null_area_cells`
@@ -427,18 +430,9 @@ Columnas principales:
 - `null_width_azimuth`
 - `null_width_elevation`
 
-La tabla conserva las metricas 2D alrededor de la direccion del jammer para
-cada umbral configurado.
-
 ## Tests
 
-Instalación de dependencias de desarrollo:
-
-```bash
-python -m pip install -r tests/requirements-dev.txt
-```
-
-Ejecución:
+Ejecutar la suite:
 
 ```bash
 python -m pytest tests
@@ -446,42 +440,26 @@ python -m pytest tests
 
 La suite cubre:
 
-- parseo y validación de configuración;
-- geometría CRPA y steering vector ideal;
-- generación de ruido y señales jammer;
+- parseo y validacion de configuracion;
+- geometria CRPA y steering ideal;
+- carga y reconstruccion de steering medido desde MAT sinteticos;
+- generacion de ruido y senales jammer;
+- frecuencia RF y longitud de onda por jammer;
 - covarianza, diagonal loading y pseudoinversa;
-- pesos `power_inversion` y `lcmv`;
-- evaluación de patrones 1D/2D;
-- métricas de profundidad, anchura y área 2D de nulo;
-- creación de salidas principales;
-- plots con backend `Agg` de Matplotlib.
+- pesos `power_inversion`, `lcmv` y `lcmvq`;
+- patrones 1D/2D y PSD temporal;
+- metricas de profundidad, anchura y area 2D de nulo;
+- creacion de salidas principales;
+- plots con backend `Agg` de Matplotlib;
+- integracion ligera de `run_project` para combinaciones de steering, DoA y
+  algoritmo.
 
 ## Limitaciones actuales
 
-- Solo se implementa geometría `hexagonal_7`.
-- Se soporta steering `ideal` y steering `measured` por vecino mas cercano
-  sobre un CSV con amplitud/fase o real/imag por elemento.
-- El modelo `measured` no interpola entre muestras; usa la direccion medida
-  mas cercana, por lo que el paso de scan no debe ser mas fino que la malla
-  real salvo que se quiera sobremuestrear para visualizacion.
-- `bandwidth_hz` existe como campo de configuración, pero no se usa todavía
-  en la generación de señal.
-- LCMV no admite más de `num_elements - 1` jammers.
-
-## Sustitución futura por CRPA real
-
-El punto principal de sustitución está en:
-
-```text
-crpa_sim/array_model.py -> steering_vector()
-```
-
-Actualmente se selecciona con:
-
-```text
-steering_model = "ideal" | "measured"
-```
-
-Una integracion con datos reales mas completa podria extender esa funcion
-para interpolar steering vectors medidos, patrones de elemento, errores de
-calibracion o acoplo mutuo.
+- Solo se implementa geometria `hexagonal_7`.
+- El modelo `measured` usa vecino mas cercano en azimut/elevacion.
+- `bandwidth_hz` existe como campo de configuracion, pero no se usa todavia
+  en la generacion de senal.
+- `lcmv` no admite mas de `num_elements - 1` jammers.
+- El flujo activo de steering medido usa MAT de fase/amplitud; cualquier helper
+  historico de CSV no forma parte de la ejecucion principal.

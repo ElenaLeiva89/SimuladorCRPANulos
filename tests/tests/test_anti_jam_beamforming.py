@@ -8,7 +8,7 @@ import pytest
 from crpa_sim.array_model import create_crpa_geometry, steering_vector
 from crpa_sim.beamformers import compute_lcmv_weights, compute_power_inversion_weights, compute_weights
 from crpa_sim.config import JammerInstance
-from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
+from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix, jammer_wavelength_m
 from crpa_sim.null_metrics import compute_null_depth_dB, compute_null_metrics_for_jammers
 from crpa_sim.patterns import conventional_weights, make_scan_vectors
 
@@ -22,7 +22,15 @@ def _make_case(config, rng):
 
 def _ideal_config(config):
     """Devuelve una configuracion ideal para tests con aserciones ideales."""
-    return replace(config, array=replace(config.array, steering_model="ideal", measured_steering_file=None))
+    return replace(
+        config,
+        array=replace(
+            config.array,
+            steering_model="ideal",
+            measured_phase_mat_file=None,
+            measured_amplitude_mat_file=None,
+        ),
+    )
 
 
 def test_lcmv_enforces_unit_desired_gain_and_deep_jammer_nulls(fast_config, rng):
@@ -35,7 +43,7 @@ def test_lcmv_enforces_unit_desired_gain_and_deep_jammer_nulls(fast_config, rng)
     w = compute_lcmv_weights(cfg, X, positions, jammers)
 
     a_des = steering_vector(cfg, positions, cfg.beamforming.desired_azimuth_deg, cfg.beamforming.desired_elevation_deg)
-    assert np.isclose(np.vdot(w, a_des), 1.0 + 0j, atol=1e-6)
+    assert np.isclose(w @ a_des, 1.0 + 0j, atol=1e-6)
     for jammer in jammers:
         null_depth = compute_null_depth_dB(cfg, positions, w, jammer)
         assert null_depth < -70.0
@@ -132,11 +140,17 @@ def test_calibration_errors_degrade_ideal_lcmv_null(fast_config, rng):
     w = compute_lcmv_weights(cfg, X, positions, jammers)
     ideal_depth = compute_null_depth_dB(cfg, positions, w, jammers[0])
 
-    ideal_manifold = steering_vector(cfg, positions, jammers[0].azimuth_deg, jammers[0].elevation_deg)
+    ideal_manifold = steering_vector(
+        cfg,
+        positions,
+        jammers[0].azimuth_deg,
+        jammers[0].elevation_deg,
+        wavelength_m=jammer_wavelength_m(cfg, jammers[0]),
+    )
     gain_error = 1.0 + 0.03 * np.linspace(-1.0, 1.0, cfg.array.num_elements)
     phase_error_rad = 0.02 * np.arange(cfg.array.num_elements)
     calibrated_manifold = gain_error * np.exp(1j * phase_error_rad) * ideal_manifold
-    calibrated_depth = 20.0 * np.log10(abs(np.vdot(w, calibrated_manifold)) + 1e-12)
+    calibrated_depth = 20.0 * np.log10(abs(w @ calibrated_manifold) + 1e-12)
 
     assert ideal_depth < -90.0
     assert calibrated_depth > ideal_depth + 40.0
@@ -153,13 +167,19 @@ def test_mutual_coupling_degrades_ideal_lcmv_null(fast_config, rng):
     w = compute_lcmv_weights(cfg, X, positions, jammers)
     ideal_depth = compute_null_depth_dB(cfg, positions, w, jammers[0])
 
-    ideal_manifold = steering_vector(cfg, positions, jammers[0].azimuth_deg, jammers[0].elevation_deg)
+    ideal_manifold = steering_vector(
+        cfg,
+        positions,
+        jammers[0].azimuth_deg,
+        jammers[0].elevation_deg,
+        wavelength_m=jammer_wavelength_m(cfg, jammers[0]),
+    )
     coupling = np.eye(cfg.array.num_elements, dtype=complex)
     for idx in range(cfg.array.num_elements):
         coupling[idx, (idx - 1) % cfg.array.num_elements] += 0.05 * np.exp(1j * 0.2)
         coupling[idx, (idx + 1) % cfg.array.num_elements] += 0.05 * np.exp(-1j * 0.2)
     coupled_manifold = coupling @ ideal_manifold
-    coupled_depth = 20.0 * np.log10(abs(np.vdot(w, coupled_manifold)) + 1e-12)
+    coupled_depth = 20.0 * np.log10(abs(w @ coupled_manifold) + 1e-12)
 
     assert ideal_depth < -90.0
     assert coupled_depth > ideal_depth + 40.0
@@ -185,7 +205,7 @@ def test_adaptive_weights_remain_finite_with_very_few_snapshots(fast_config, rng
     assert np.all(np.isfinite(w_pi))
     assert np.all(np.isfinite(w_lcmv))
     desired = steering_vector(lcmv_cfg, positions, lcmv_cfg.beamforming.desired_azimuth_deg, lcmv_cfg.beamforming.desired_elevation_deg)
-    assert np.vdot(w_lcmv, desired) == pytest.approx(1.0 + 0.0j, abs=1e-6)
+    assert w_lcmv @ desired == pytest.approx(1.0 + 0.0j, abs=1e-6)
     assert compute_null_depth_dB(lcmv_cfg, positions, w_lcmv, jammers[0]) < -90.0
 
 

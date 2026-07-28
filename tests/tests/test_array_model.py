@@ -1,10 +1,7 @@
 from dataclasses import replace
 import numpy as np
 import pytest
-from crpa_sim.array_model import create_crpa_geometry, direction_unit_vector, measured_steering_matrix_for_angles, steering_vector, steering_vector_ideal
-
-
-MEASURED_STEERING_FILE = "data/crpa_measured_steering.csv"
+from crpa_sim.array_model import create_crpa_geometry, direction_unit_vector, steering_vector, steering_vector_ideal
 
 def test_geometry_and_direction(project_config):
     """Verifica geometria hexagonal y conversion azimut/elevacion.
@@ -21,32 +18,41 @@ def test_geometry_and_direction(project_config):
     assert np.allclose(u[:2], [0, 0], atol=1e-12)
     assert u[2] == pytest.approx(1.0)
 
-def test_steering_vector_models(project_config, element_positions_m):
+def test_steering_vector_models(project_config, measured_project_config, element_positions_m):
     """Comprueba steering ideal, steering medido y modelos invalidos.
 
     Parametros:
         project_config: Configuracion base de simulacion.
         element_positions_m: Posiciones XYZ del array.
     """
-    ideal = replace(project_config, array=replace(project_config.array, steering_model="ideal", measured_steering_file=None))
+    ideal = replace(
+        project_config,
+        array=replace(
+            project_config.array,
+            steering_model="ideal",
+            measured_phase_mat_file=None,
+            measured_amplitude_mat_file=None,
+        ),
+    )
     a = steering_vector_ideal(element_positions_m, 40, 10, project_config.signal.wavelength_m)
     assert a.shape == (7,)
     assert np.allclose(np.abs(a), 1.0)
     assert steering_vector(ideal, element_positions_m, 40, 10).shape == (7,)
 
-    measured = replace(
-        project_config,
-        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
-    )
-    measured_vector = steering_vector(measured, element_positions_m, 40, 10)
+    measured_vector = steering_vector(measured_project_config, element_positions_m, 40, 10)
     assert measured_vector.shape == (7,)
     assert np.all(np.isfinite(measured_vector))
 
     measured_without_file = replace(
         project_config,
-        array=replace(project_config.array, steering_model="measured", measured_steering_file=None),
+        array=replace(
+            project_config.array,
+            steering_model="measured",
+            measured_phase_mat_file=None,
+            measured_amplitude_mat_file=None,
+        ),
     )
-    with pytest.raises(ValueError, match="measured_steering_file"):
+    with pytest.raises(ValueError, match="MAT de fase y amplitud"):
         steering_vector(measured_without_file, element_positions_m, 40, 10)
 
     bad = replace(project_config, array=replace(project_config.array, steering_model="bad"))
@@ -54,30 +60,20 @@ def test_steering_vector_models(project_config, element_positions_m):
         steering_vector(bad, element_positions_m, 40, 10)
 
 
-def test_measured_steering_matrix_matches_scalar_vectors(project_config, element_positions_m):
-    """Comprueba la ruta vectorizada de steering medido.
+def test_measured_steering_vector_uses_mat_tables(measured_project_config, element_positions_m):
+    """Comprueba la ruta activa de steering medido desde tablas MAT.
 
     Parametros:
-        project_config: Configuracion base de simulacion.
+        measured_project_config: Configuracion con MAT sinteticos.
         element_positions_m: Posiciones XYZ del array.
     """
-    measured = replace(
-        project_config,
-        array=replace(project_config.array, steering_model="measured", measured_steering_file=MEASURED_STEERING_FILE),
-    )
-    az = np.array([0.0, 90.0, 180.0])
-    el = np.array([0.0, 45.0, 90.0])
+    vector = steering_vector(measured_project_config, element_positions_m, 90.0, 45.0)
 
-    matrix = measured_steering_matrix_for_angles(measured, az, el)
-    scalar_vectors = np.vstack([
-        steering_vector(measured, element_positions_m, az_i, el_i)
-        for az_i, el_i in zip(az, el)
-    ])
+    assert vector.shape == (measured_project_config.array.num_elements,)
+    np.testing.assert_allclose(vector, np.ones(7, dtype=complex), atol=1e-12)
 
-    assert matrix.shape == (3, measured.array.num_elements)
-    np.testing.assert_allclose(matrix, scalar_vectors)
-    with pytest.raises(ValueError, match="misma longitud"):
-        measured_steering_matrix_for_angles(measured, np.array([0.0, 90.0]), np.array([0.0]))
+    with pytest.raises(ValueError, match="wavelength_m"):
+        steering_vector(measured_project_config, element_positions_m, 0.0, 0.0, wavelength_m=0.0)
 
 
 def test_create_geometry_rejects_unsupported(project_config):

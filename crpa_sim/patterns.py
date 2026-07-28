@@ -10,11 +10,9 @@ buscar elemento a elemento para cada punto angular.
 """
 
 from __future__ import annotations
-
 import numpy as np
 import pandas as pd
-
-from .array_model import measured_steering_matrix_for_angles, steering_vector
+from .array_model import steering_vector
 from .config import ProjectConfig
 
 
@@ -50,9 +48,9 @@ def _evaluate_response_complex_for_angles(
     if len(azimuth_deg_array) != len(elevation_deg_array):
         raise ValueError("azimuth_deg_array y elevation_deg_array deben tener la misma longitud.")
 
-    if config.array.steering_model == "measured":
-        steering = measured_steering_matrix_for_angles(config, azimuth_deg_array, elevation_deg_array)
-        return steering @ np.conjugate(weights)
+    # if config.array.steering_model == "measured":
+    #     steering = measured_steering_matrix_for_angles(config, azimuth_deg_array, elevation_deg_array)
+    #     return steering @ np.conjugate(weights)
 
     values = []
     for az, el in zip(azimuth_deg_array, elevation_deg_array):
@@ -174,9 +172,11 @@ def compute_2d_response_grid(
         else:
             response_complex = steering @ np.conjugate(weights)
     elif config.array.steering_model == "measured":
-        # Rama measured optimizada: steering para toda la malla en una matriz.
-        # Shape: (num_puntos_malla, num_elementos).
-        steering = measured_steering_matrix_for_angles(config, az_flat, el_flat)
+        steering_rows = []
+        for az, el in zip(az_flat, el_flat):
+            steering_rows.append(steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m,))
+        steering = np.vstack(steering_rows)
+
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
             response_complex = steering @ weights
         else:

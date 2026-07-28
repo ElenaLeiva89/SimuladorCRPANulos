@@ -40,7 +40,11 @@ class ArrayConfig:
     element_spacing_m: float
     array_boresight_elevation_deg: float
     steering_model: str = "ideal"
-    measured_steering_file: str | None = None
+    
+    # En modo measured hacen falta dos tablas:
+    # una con diferencias de fase y otra con diferencias de amplitud.
+    measured_phase_mat_file: str | None = None
+    measured_amplitude_mat_file: str | None = None
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "ArrayConfig":
@@ -54,8 +58,13 @@ class ArrayConfig:
         values["geometry"] = str(values["geometry"]).lower()
         values["element_type"] = str(values["element_type"]).lower()
         values["steering_model"] = str(values.get("steering_model", "ideal")).lower()
-        if values.get("measured_steering_file") in ("", None):
-            values["measured_steering_file"] = None
+        # Las cadenas vacías se interpretan como fichero no configurado.
+        if values.get("measured_phase_mat_file") in ("", None):
+            values["measured_phase_mat_file"] = None
+
+        if values.get("measured_amplitude_mat_file") in ("", None):
+            values["measured_amplitude_mat_file"] = None
+
         return cls(**values)
 
 

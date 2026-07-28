@@ -2,15 +2,23 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from crpa_sim.array_model import steering_vector
-from crpa_sim.beamformers import compute_lcmv_weights, compute_power_inversion_weights, compute_weights
-from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix
+from crpa_sim.beamformers import compute_lcmv_weights, compute_lcmvq_weights, compute_power_inversion_weights, compute_weights
+from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix, jammer_wavelength_m
 from crpa_sim.null_metrics import circular_azimuth_width_deg, compute_null_depth_dB, compute_null_metrics_for_jammers, measure_null_region_2d
 from crpa_sim.patterns import make_scan_vectors
 
 
 def _ideal_config(config):
     """Devuelve una configuracion ideal para tests con aserciones ideales."""
-    return replace(config, array=replace(config.array, steering_model="ideal", measured_steering_file=None))
+    return replace(
+        config,
+        array=replace(
+            config.array,
+            steering_model="ideal",
+            measured_phase_mat_file=None,
+            measured_amplitude_mat_file=None,
+        ),
+    )
 
 
 def test_power_inversion_and_lcmv(project_config, power_inversion_config, element_positions_m, rng):
@@ -35,9 +43,39 @@ def test_power_inversion_and_lcmv(project_config, power_inversion_config, elemen
     X, _, _, _ = generate_received_snapshot_matrix(lcmv_config, element_positions_m, jammers, rng)
     w = compute_lcmv_weights(lcmv_config, X, element_positions_m, jammers)
     a_des = steering_vector(lcmv_config, element_positions_m, lcmv_config.beamforming.desired_azimuth_deg, lcmv_config.beamforming.desired_elevation_deg)
-    assert np.vdot(w, a_des) == pytest.approx(1+0j, abs=1e-6)
+    assert w @ a_des == pytest.approx(1+0j, abs=1e-6)
     for jammer in jammers:
-        assert abs(np.vdot(w, steering_vector(lcmv_config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg))) < 1e-6
+        a_jam = steering_vector(
+            lcmv_config,
+            element_positions_m,
+            jammer.azimuth_deg,
+            jammer.elevation_deg,
+            wavelength_m=jammer_wavelength_m(lcmv_config, jammer),
+        )
+        assert abs(w @ a_jam) < 1e-6
+
+
+def test_lcmvq_enforces_geometric_constraints(project_config, element_positions_m, rng):
+    """Valida el algoritmo LCMVQ sin covarianza."""
+    cfg = replace(_ideal_config(project_config), beamforming=replace(project_config.beamforming, algorithm="lcmvq"))
+    jammers = build_jammer_case(cfg, rng)
+    w = compute_lcmvq_weights(cfg, element_positions_m, jammers)
+
+    central_constraint = np.zeros(cfg.array.num_elements, dtype=complex)
+    central_constraint[0] = 1.0 + 0.0j
+    a_des = steering_vector(cfg, element_positions_m, cfg.beamforming.desired_azimuth_deg, cfg.beamforming.desired_elevation_deg)
+
+    assert w @ central_constraint == pytest.approx(1.0 + 0.0j, abs=1e-6)
+    assert w @ a_des == pytest.approx(1.0 + 0.0j, abs=1e-6)
+    for jammer in jammers:
+        a_jam = steering_vector(
+            cfg,
+            element_positions_m,
+            jammer.azimuth_deg,
+            jammer.elevation_deg,
+            wavelength_m=jammer_wavelength_m(cfg, jammer),
+        )
+        assert abs(w @ a_jam) < 1e-6
 
 def test_compute_weights_selector(project_config, power_inversion_config, element_positions_m, rng):
     """Comprueba el selector de algoritmos de pesos.
@@ -48,7 +86,8 @@ def test_compute_weights_selector(project_config, power_inversion_config, elemen
         element_positions_m: Posiciones XYZ del array.
         rng: Generador aleatorio determinista.
     """
-    for cfg in [project_config, power_inversion_config]:
+    lcmvq_config = replace(project_config, beamforming=replace(project_config.beamforming, algorithm="lcmvq"))
+    for cfg in [project_config, power_inversion_config, lcmvq_config]:
         jammers = build_jammer_case(cfg, rng)
         X, _, _, _ = generate_received_snapshot_matrix(cfg, element_positions_m, jammers, rng)
         assert compute_weights(cfg, X, element_positions_m, jammers).shape == (7,)

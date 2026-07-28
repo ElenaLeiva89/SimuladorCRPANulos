@@ -5,8 +5,9 @@
     "element_type": "isotropic",
     "element_spacing_m": 0.095,
     "array_boresight_elevation_deg": 90.0,
-    "steering_model": "ideal",
-    "measured_steering_file": "data/crpa_measured_steering.csv"
+    "steering_model": "measured",
+    "measured_phase_mat_file": "C:\\Users\\eleivag\\Desktop\\NAVSHIELD\\.DesarrollosPropios\\GEODE-1217-SimuladorNulos\\data\\TABLASFASE_E1_C_LBADICIONALES_ALT.mat",
+    "measured_amplitude_mat_file": "C:\\Users\\eleivag\\Desktop\\NAVSHIELD\\.DesarrollosPropios\\GEODE-1217-SimuladorNulos\\data\\TABLASAMPL_E1_C_LBADICIONALES_ALT.mat"
   },
   "signal_config": {
     "gnss_band": "E1",
@@ -33,27 +34,75 @@
     "elevation_scan_min_deg": 0.0,
     "elevation_scan_max_deg": 90.0,
     "elevation_scan_step_deg": 0.5,
-    "null_thresholds_dB": [-10, -20, -30, -40, -50]
+    "null_thresholds_dB": [-10,-20,-30,-40,-50]
   },
   "noise_config": {
     "noise_power_linear": 1.0
   },
   "jammer_config": {
-    "num_jammers": 2,
+    "num_jammers": 1,
     "jnr_dB": 20.0,
-    "variable_doa_azimuth_range_deg": [0.0, 360.0],
-    "variable_doa_elevation_range_deg": [0.0, 90.0],
+    "variable_doa_azimuth_range_deg": [0.0,360.0],
+    "variable_doa_elevation_range_deg": [0.0,90.0],
     "base_jammers": [
-      {"name": "Jammer_1", "azimuth_deg": 40.0,  "elevation_deg": 60.0, "signal_type": "tone", "center_frequency_hz": 1578620000.0, "normalized_frequency": 0.05, "chirp_frequency":60000000},
-      {"name": "Jammer_2", "azimuth_deg": 150.0,  "elevation_deg": 30.0, "signal_type": "tone", "center_frequency_hz": 1568620000.0, "normalized_frequency": 0.11, "chirp_frequency":60000000},
-      {"name": "Jammer_3", "azimuth_deg": 330.0, "elevation_deg": 80.0, "signal_type": "tone", "center_frequency_hz": 1578620000.0, "normalized_frequency": 0.00, "chirp_frequency":60000000},
-      {"name": "Jammer_4", "azimuth_deg": 270.0, "elevation_deg": 10.0, "signal_type": "tone", "center_frequency_hz": 1578620000.0, "normalized_frequency": 0.17, "chirp_frequency":60000000},
-      {"name": "Jammer_5", "azimuth_deg": 140.0, "elevation_deg": 50.0, "signal_type": "tone", "center_frequency_hz": 1578620000.0, "normalized_frequency": 0.30, "chirp_frequency":60000000},
-      {"name": "Jammer_6", "azimuth_deg": 210.0,"elevation_deg": 60.0, "signal_type": "tone", "center_frequency_hz": 1578620000.0, "normalized_frequency": 0.23, "chirp_frequency":60000000}
+      {
+        "name": "Jammer_1",
+        "azimuth_deg": 40.0,
+        "elevation_deg": 60.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1578620000.0,
+        "normalized_frequency": 0.05,
+        "chirp_frequency": 60000000
+      },
+      {
+        "name": "Jammer_2",
+        "azimuth_deg": 150.0,
+        "elevation_deg": 30.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1568620000.0,
+        "normalized_frequency": 0.11,
+        "chirp_frequency": 60000000
+      },
+      {
+        "name": "Jammer_3",
+        "azimuth_deg": 330.0,
+        "elevation_deg": 80.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1578620000.0,
+        "normalized_frequency": 0.0,
+        "chirp_frequency": 60000000
+      },
+      {
+        "name": "Jammer_4",
+        "azimuth_deg": 270.0,
+        "elevation_deg": 10.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1578620000.0,
+        "normalized_frequency": 0.17,
+        "chirp_frequency": 60000000
+      },
+      {
+        "name": "Jammer_5",
+        "azimuth_deg": 140.0,
+        "elevation_deg": 50.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1578620000.0,
+        "normalized_frequency": 0.3,
+        "chirp_frequency": 60000000
+      },
+      {
+        "name": "Jammer_6",
+        "azimuth_deg": 210.0,
+        "elevation_deg": 60.0,
+        "signal_type": "tone",
+        "center_frequency_hz": 1578620000.0,
+        "normalized_frequency": 0.23,
+        "chirp_frequency": 60000000
+      }
     ]
   },
   "output_config": {
-    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_Elevacion60_2Jammers",
+    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_1Jammers",
     "save_csv": true,
     "save_npz": false,
     "save_plots": true,
