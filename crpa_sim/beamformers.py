@@ -120,6 +120,7 @@ def compute_lcmvq_weights(
     main_constraint = np.zeros(num_elements, dtype=complex)
     main_constraint[0] = 1.0 + 0.0j
 
+    steering_vectors = []
     steering_vectors = [main_constraint]
 
     a_des = steering_vector(
@@ -130,6 +131,7 @@ def compute_lcmvq_weights(
     )
     steering_vectors.append(a_des)
 
+    desired_response = [1.0 + 0.0j]
     desired_response = [1.0 + 0.0j, 1.0 + 0.0j]
 
     for jammer in jammer_list:
@@ -151,7 +153,7 @@ def compute_lcmvq_weights(
         )
         steering_vectors.append(a_jam)
         # CAMBIO DEL DEPTH DB
-        desired_response.append(0.00 + 0.0j)
+        desired_response.append(0.00001 + 0.0j)
         #desired_response.append(0.01 + 0.0j)
 
     C = np.column_stack(steering_vectors)

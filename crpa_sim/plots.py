@@ -396,6 +396,66 @@ def plot_3d(
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
+def plot_3d_spherical(
+    adaptive_grid: dict[str, np.ndarray],
+    output_path: Path,
+    title: str,
+    adaptive_label: str = "Algoritmo",
+    jammer_info: list[tuple[str, float, float] | tuple[str, float, float, int]] | None = None,
+) -> None:
+    """Dibuja el patrón 3D en coordenadas esféricas."""
+
+    response_dB, colorbar_label, is_normalized = _select_grid_response_dB(
+        adaptive_grid
+    )
+
+    # Limitar rango dinámico para que se vean lóbulos laterales
+    response_dB = np.maximum(response_dB, -40.0)
+
+    # dB -> radio normalizado
+    r = 10.0 ** (response_dB / 20.0)
+
+    az_rad = np.deg2rad(adaptive_grid["azimuth_deg"])
+    el_rad = np.deg2rad(adaptive_grid["elevation_deg"])
+
+    # Esféricas -> Cartesianas
+    x = r * np.cos(el_rad) * np.cos(az_rad)
+    y = r * np.cos(el_rad) * np.sin(az_rad)
+    z = r * np.sin(el_rad)
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection="3d")
+
+    surf = ax.plot_surface(
+        x,
+        y,
+        z,
+        facecolors=plt.cm.viridis((response_dB + 40.0) / 40.0),
+        linewidth=0,
+        antialiased=True,
+        shade=True,
+        rcount=100,
+        ccount=100,
+    )
+
+    max_range = np.max(np.sqrt(x**2 + y**2 + z**2))
+
+    ax.set_xlim(-max_range, max_range)
+    ax.set_ylim(-max_range, max_range)
+    ax.set_zlim(-max_range, max_range)
+
+    ax.set_box_aspect([1, 1, 1])
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+
+    ax.set_title(adaptive_label)
+    fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1, label=colorbar_label)
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
 
 def plot_temporal_psd_spectrum(
     spectrum_table: pd.DataFrame,

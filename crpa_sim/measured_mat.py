@@ -413,6 +413,31 @@ def _frequency_interpolation_indices(
     return lower, upper, float(alpha)
 
 
+def _interpolation_indices(
+    search_array: np.ndarray,
+    target_value: float,
+) -> tuple[int, int, float]:
+    """Devuelve índices inferior/superior y factor de interpolación."""
+
+    if target_value <= search_array[0]:
+        return 0, 0, 0.0
+
+    if target_value >= search_array[-1]:
+        last = len(search_array) - 1
+        return last, last, 0.0
+
+    upper = int(np.searchsorted(search_array, target_value, side="right",))
+    lower = upper - 1
+
+    value_low = search_array[lower]
+    value_high = search_array[upper]
+    alpha = (target_value - value_low) / (value_high - value_low)
+
+    return lower, upper, float(alpha)
+
+def to_complex(amplitude_dB, phase_deg):
+    return (10.0 ** (amplitude_dB / 20.0)* np.exp(1j * np.deg2rad(phase_deg)))
+
 def measured_steering_vector(
     database: MeasuredSteeringDatabase,
     azimuth_deg: float,
@@ -434,33 +459,36 @@ def measured_steering_vector(
 
     azimuth_deg = azimuth_deg % 360.0
 
-    azimuth_index = _nearest_circular_azimuth_index(database.azimuths_deg, azimuth_deg,)
-    elevation_index = _nearest_index(database.elevations_deg,elevation_deg,)
-    freq_low, freq_high, alpha = _frequency_interpolation_indices(database.frequencies_hz,frequency_hz,)
-    amplitude_low_dB = database.amplitude_dB[azimuth_index, elevation_index, :, freq_low,]
-    phase_low_deg = database.phase_deg[azimuth_index, elevation_index, :, freq_low,]
+    # Índices y pesos de interpolación
+    az_low, az_high, az_alpha = _interpolation_indices(database.azimuths_deg,azimuth_deg,)
+    el_low, el_high, el_alpha = _interpolation_indices(database.elevations_deg,elevation_deg,)
+    freq_low, freq_high, freq_alpha = _interpolation_indices(database.frequencies_hz,frequency_hz,)
 
-    if freq_low == freq_high:
-        amplitude_interp_dB = amplitude_low_dB
-        phase_interp_deg = phase_low_deg
-    else:
-        amplitude_high_dB = database.amplitude_dB[azimuth_index, elevation_index, :, freq_high,]
-        phase_high_deg = database.phase_deg[azimuth_index, elevation_index, :, freq_high,]
+    # 8 vértices del cubo convertidos a campo complejo
+    e000 = to_complex(database.amplitude_dB[az_low,  el_low,  :, freq_low],database.phase_deg[az_low,  el_low,  :, freq_low],)
+    e100 = to_complex(database.amplitude_dB[az_high, el_low,  :, freq_low],database.phase_deg[az_high, el_low,  :, freq_low],)
+    e010 = to_complex(database.amplitude_dB[az_low,  el_high, :, freq_low],database.phase_deg[az_low,  el_high, :, freq_low],)
+    e110 = to_complex(database.amplitude_dB[az_high, el_high, :, freq_low],database.phase_deg[az_high, el_high, :, freq_low],)
+    e001 = to_complex(database.amplitude_dB[az_low,  el_low,  :, freq_high],database.phase_deg[az_low,  el_low,  :, freq_high],)
+    e101 = to_complex(database.amplitude_dB[az_high, el_low,  :, freq_high],database.phase_deg[az_high, el_low,  :, freq_high],)
+    e011 = to_complex(database.amplitude_dB[az_low,  el_high, :, freq_high],database.phase_deg[az_low,  el_high, :, freq_high],)
+    e111 = to_complex(database.amplitude_dB[az_high, el_high, :, freq_high],database.phase_deg[az_high, el_high, :, freq_high],)
 
-        # La amplitud en dB se interpola linealmente.
-        amplitude_interp_dB = (amplitude_low_dB+ alpha * (amplitude_high_dB - amplitude_low_dB))
-        # La fase debe interpolarse por el camino angular más corto,
-        # evitando saltos artificiales entre +180 y -180 grados.
-        phase_difference_deg = _wrap_angle_deg(phase_high_deg - phase_low_deg)
-        phase_interp_deg = _wrap_angle_deg(phase_low_deg + alpha * phase_difference_deg)
+    # Interpolación trilineal del campo complejo
+    e00 = e000 + az_alpha * (e100 - e000)
+    e10 = e010 + az_alpha * (e110 - e010)
+    e01 = e001 + az_alpha * (e101 - e001)
+    e11 = e011 + az_alpha * (e111 - e011)
+    e0 = e00 + el_alpha * (e10 - e00)
+    e1 = e01 + el_alpha * (e11 - e01)
 
-    amplitude_ratio = 10.0 ** (amplitude_interp_dB / 20.0)
-    phase_rad = np.deg2rad(phase_interp_deg)
+    field_interp = e0 + freq_alpha * (e1 - e0)
+
     steering = np.empty(7, dtype=complex)
     # Elemento central utilizado como referencia relativa.
     steering[0] = 1.0 + 0.0j
     # Elementos exteriores 2..7 respecto al central.
-    steering[1:] = (amplitude_ratio * np.exp(1j * phase_rad))
+    steering[1:] = field_interp
 
     return steering
 

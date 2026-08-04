@@ -24,7 +24,7 @@ def conventional_weights(config: ProjectConfig, element_positions_m: np.ndarray)
         config.beamforming.desired_azimuth_deg,
         config.beamforming.desired_elevation_deg,
     )
-    return a_des / element_positions_m.shape[0]
+    return a_des / element_positions_m.shape[0]  ### REVISAR SIGNO - DEPENDE DEL RESTO
 
 
 def _evaluate_response_complex_for_angles(
@@ -172,6 +172,7 @@ def compute_2d_response_grid(
         else:
             response_complex = steering @ np.conjugate(weights)
     elif config.array.steering_model == "measured":
+
         steering_rows = []
         for az, el in zip(az_flat, el_flat):
             steering_rows.append(steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m,))
@@ -181,6 +182,7 @@ def compute_2d_response_grid(
             response_complex = steering @ weights
         else:
             response_complex = steering @ np.conjugate(weights)
+            
     else:
         raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
 

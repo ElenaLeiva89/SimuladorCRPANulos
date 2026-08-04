@@ -44,13 +44,13 @@ from crpa_sim.patterns import (
 )
 from crpa_sim.plots import (
     plot_3d,
+    plot_3d_spherical,
     plot_array_geometry,
     plot_heatmap,
     plot_pattern_azimuth,
     plot_pattern_elevation,
     plot_temporal_psd_spectrum,
 )
-
 
 def _save_global_outputs(
     config: ProjectConfig,
@@ -159,7 +159,6 @@ def _save_global_outputs(
             "PSD temporal media de snapshots",
         )
 
-
 def _save_jammer_plots(
     config: ProjectConfig,
     output_dir: Path,
@@ -230,6 +229,7 @@ def _save_jammer_plots(
             adaptive_label=config.beamforming.algorithm,
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
+        
 
     jammer_info_3d = [
         (jammer.name, jammer.azimuth_deg, jammer.elevation_deg, idx - 1)
@@ -291,15 +291,22 @@ def _save_jammer_plots(
         adaptive_label=config.beamforming.algorithm,
         jammer_info=jammer_info_3d,
     )
-    # plot_heatmap(
-    #     radiation_grid,
-    #     output_dir / "array_factor_heatmap.png",
-    #     f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D",
-    #     adaptive_label=config.beamforming.algorithm,
-    #     jammer_info=jammer_info_3d,
-    #     desired_info=desired_info,
-    # )
 
+    plot_3d_spherical(
+        radiation_grid,
+        output_dir / "pattern_3d_spherical.png",
+        "Patron 3D Esfericas CRPA para algoritmo " + config.beamforming.algorithm,
+        adaptive_label=config.beamforming.algorithm,
+        jammer_info=jammer_info_3d,
+    )
+    plot_heatmap(
+        radiation_grid,
+        output_dir / "array_factor_heatmap.png",
+        f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D",
+        adaptive_label=config.beamforming.algorithm,
+        jammer_info=jammer_info_3d,
+        desired_info=desired_info,
+    )
 
 def parse_command_line() -> argparse.Namespace:
     """Lee los parámetros usados para seleccionar el modelo de steering."""
@@ -317,7 +324,6 @@ def parse_command_line() -> argparse.Namespace:
             parser.error("--amplitude-mat es obligatorio en modo measured.")
 
     return args
-
 
 def update_steering_configuration(
     config_path: Path,
@@ -351,7 +357,6 @@ def update_steering_configuration(
     with open(config_path, "w", encoding="utf-8") as file:
         json.dump(raw_config, file, indent=2, ensure_ascii=False)
         file.write("\n")
-
 
 def run_project(config_path: Path = Path("input_config.json")) -> None:
     """Ejecuta la simulacion completa a partir de un fichero JSON.
@@ -391,7 +396,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
             rng,
         )
         covariance_matrix = compute_sample_covariance(snapshot_matrix)
-        selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list)
+        selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list) # Para el beamfoerming
 
         # Comprobacion diagnostica del JNR realmente generado.
         # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.

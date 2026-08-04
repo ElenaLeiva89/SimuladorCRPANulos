@@ -6,26 +6,26 @@
     "element_spacing_m": 0.095,
     "array_boresight_elevation_deg": 90.0,
     "steering_model": "measured",
-    "measured_phase_mat_file": "C:\\Users\\eleivag\\Desktop\\NAVSHIELD\\.DesarrollosPropios\\GEODE-1217-SimuladorNulos\\data\\TABLASFASE_E1_C_LBADICIONALES_ALT.mat",
-    "measured_amplitude_mat_file": "C:\\Users\\eleivag\\Desktop\\NAVSHIELD\\.DesarrollosPropios\\GEODE-1217-SimuladorNulos\\data\\TABLASAMPL_E1_C_LBADICIONALES_ALT.mat"
+    "measured_phase_mat_file": "C:\\repos\\SimuladorCRPANulos\\data\\TABLASFASE_E1_C_LBADICIONALES_ALT.mat",
+    "measured_amplitude_mat_file": "C:\\repos\\SimuladorCRPANulos\\data\\TABLASAMPL_E1_C_LBADICIONALES_ALT.mat"
   },
   "signal_config": {
     "gnss_band": "E1",
     "speed_of_light_m_s": 299792458.0,
     "sample_rate_hz": 64000000.0,
-    "num_snapshots": 4096,
+    "num_snapshots": 8192,
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 10,
+    "num_montecarlo": 1,
     "doa_mode": "fixed"
   },
   "beamforming_config": {
     "algorithm": "lcmvq",
-    "desired_azimuth_deg": 0.0,
-    "desired_elevation_deg": 90.0,
+    "desired_azimuth_deg": 20.0,
+    "desired_elevation_deg": 20.0,
     "diagonal_loading_factor": 0.001,
-    "power_inversion_reference_element": 1
+    "power_inversion_reference_element": 0
   },
   "scan_config": {
     "azimuth_scan_min_deg": 0.0,
@@ -34,20 +34,32 @@
     "elevation_scan_min_deg": 0.0,
     "elevation_scan_max_deg": 90.0,
     "elevation_scan_step_deg": 0.5,
-    "null_thresholds_dB": [-10,-20,-30,-40,-50]
+    "null_thresholds_dB": [
+      -10,
+      -20,
+      -30,
+      -40,
+      -50
+    ]
   },
   "noise_config": {
     "noise_power_linear": 1.0
   },
   "jammer_config": {
-    "num_jammers": 1,
-    "jnr_dB": 20.0,
-    "variable_doa_azimuth_range_deg": [0.0,360.0],
-    "variable_doa_elevation_range_deg": [0.0,90.0],
+    "num_jammers": 2,
+    "jnr_dB": 30.0,
+    "variable_doa_azimuth_range_deg": [
+      0.0,
+      360.0
+    ],
+    "variable_doa_elevation_range_deg": [
+      0.0,
+      90.0
+    ],
     "base_jammers": [
       {
         "name": "Jammer_1",
-        "azimuth_deg": 40.0,
+        "azimuth_deg": 160.0,
         "elevation_deg": 60.0,
         "signal_type": "tone",
         "center_frequency_hz": 1578620000.0,
@@ -56,17 +68,17 @@
       },
       {
         "name": "Jammer_2",
-        "azimuth_deg": 150.0,
-        "elevation_deg": 30.0,
+        "azimuth_deg": 80.0,
+        "elevation_deg": 40.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1568620000.0,
+        "center_frequency_hz": 1578620000.0,
         "normalized_frequency": 0.11,
         "chirp_frequency": 60000000
       },
       {
         "name": "Jammer_3",
-        "azimuth_deg": 330.0,
-        "elevation_deg": 80.0,
+        "azimuth_deg": 60.0,
+        "elevation_deg": 60.0,
         "signal_type": "tone",
         "center_frequency_hz": 1578620000.0,
         "normalized_frequency": 0.0,
