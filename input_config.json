@@ -5,9 +5,9 @@
     "element_type": "isotropic",
     "element_spacing_m": 0.095,
     "array_boresight_elevation_deg": 90.0,
-    "steering_model": "measured",
-    "measured_phase_mat_file": "C:\\repos\\SimuladorCRPANulos\\data\\TABLASFASE_E1_C_LBADICIONALES_ALT.mat",
-    "measured_amplitude_mat_file": "C:\\repos\\SimuladorCRPANulos\\data\\TABLASAMPL_E1_C_LBADICIONALES_ALT.mat"
+    "steering_model": "ideal",
+    "measured_phase_mat_file": null,
+    "measured_amplitude_mat_file": null
   },
   "signal_config": {
     "gnss_band": "E1",
@@ -17,12 +17,12 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 1,
+    "num_montecarlo": 2,
     "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "lcmvq",
-    "desired_azimuth_deg": 20.0,
+    "algorithm": "power_inversion",
+    "desired_azimuth_deg": 40.0,
     "desired_elevation_deg": 20.0,
     "diagonal_loading_factor": 0.001,
     "power_inversion_reference_element": 0
@@ -38,16 +38,22 @@
       -10,
       -20,
       -30,
-      -40,
-      -50
+      -40
     ]
   },
   "noise_config": {
     "noise_power_linear": 1.0
   },
   "jammer_config": {
-    "num_jammers": 2,
-    "jnr_dB": 30.0,
+    "num_jammers": [
+      1,
+      2,
+      3
+    ],
+    "jnr_dB": [
+      25,
+      35
+    ],
     "variable_doa_azimuth_range_deg": [
       0.0,
       360.0
@@ -78,7 +84,7 @@
       {
         "name": "Jammer_3",
         "azimuth_deg": 60.0,
-        "elevation_deg": 60.0,
+        "elevation_deg": 70.0,
         "signal_type": "tone",
         "center_frequency_hz": 1578620000.0,
         "normalized_frequency": 0.0,
@@ -114,7 +120,7 @@
     ]
   },
   "output_config": {
-    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_1Jammers",
+    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_{num_jam}Jammers",
     "save_csv": true,
     "save_npz": false,
     "save_plots": true,

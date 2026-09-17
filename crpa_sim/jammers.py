@@ -12,6 +12,7 @@ from typing import Sequence
 
 import numpy as np
 import pandas as pd
+import random
 
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
@@ -79,19 +80,21 @@ def generate_jammer_baseband_signal(jammer: JammerInstance, num_snapshots: int, 
     raise ValueError(f"Tipo de jammer no soportado: {jammer.signal_type}")
 
 
-def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[JammerInstance]:
+def build_jammer_case(config: ProjectConfig, rng: np.random.Generator, jnr: float, num_jammers: int) -> list[JammerInstance]:
     """Construye la lista de jammers para una iteracion Monte Carlo.
 
     Parametros:
         config: Configuracion completa; define numero de jammers, JNR, modo
             DoA y plantillas base.
         rng: Generador aleatorio usado cuando doa_mode="variable".
+        jnr: jamming to noise ratio 
+        num_jammers : numero de jammers
     """
     az_min, az_max = config.jammer.variable_doa_azimuth_range_deg
     el_min, el_max = config.jammer.variable_doa_elevation_range_deg
     jammers: list[JammerInstance] = []
 
-    for template in config.jammer.base_jammers[: config.jammer.num_jammers]:
+    for template in config.jammer.base_jammers[: num_jammers]:
         if config.simulation.doa_mode == "fixed":
             az = float(template.azimuth_deg)
             el = float(template.elevation_deg)
@@ -110,7 +113,7 @@ def build_jammer_case(config: ProjectConfig, rng: np.random.Generator) -> list[J
                 name=template.name,
                 azimuth_deg=az,
                 elevation_deg=el,
-                jnr_dB=config.jammer.jnr_dB,
+                jnr_dB=jnr,
                 signal_type=template.signal_type,
                 center_frequency_hz=template.center_frequency_hz,
                 normalized_frequency=template.normalized_frequency,

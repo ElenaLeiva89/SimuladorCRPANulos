@@ -50,6 +50,7 @@ from crpa_sim.plots import (
     plot_pattern_azimuth,
     plot_pattern_elevation,
     plot_temporal_psd_spectrum,
+    plot_null_width_vs_jnr
 )
 
 def _save_global_outputs(
@@ -369,6 +370,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
         algorithm=config.beamforming.algorithm,
         doa_mode=config.simulation.doa_mode,
         steering_model=config.array.steering_model,
+        num_jam=config.jammer.num_jammers
     )
     output_dir = ensure_output_dir(resolved_output_dir)
     save_config_used(config, output_dir)
@@ -385,84 +387,136 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
 
     metrics_all: list[pd.DataFrame] = []
     summary_rows: list[dict] = []
+    rng = np.random.default_rng()
 
-    for mc in range(1, config.simulation.num_montecarlo + 1):
-        rng = np.random.default_rng()
-        jammer_list = build_jammer_case(config, rng)
-        snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
-            config,
-            element_positions_m,
-            jammer_list,
-            rng,
-        )
-        covariance_matrix = compute_sample_covariance(snapshot_matrix)
-        selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list) # Para el beamfoerming
+    n_jammers = len(config.jammer.num_jammers)
+    n_jnr = len(config.jammer.jnr_dB)
+    n_thresholds = len(config.scan.null_thresholds_dB)
 
-        # Comprobacion diagnostica del JNR realmente generado.
-        # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
-        p_noise = np.mean(np.abs(noise_matrix) ** 2)
-        p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
-        jnr_measured_dB = 10.0 * np.log10(p_jammer / p_noise)
-        print()
-        print("========== VALIDACION JNR ==========")
-        print(f"Potencia ruido  : {10*np.log10(p_noise):.2f} dB")
-        print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
-        print(f"JNR medido      : {jnr_measured_dB:.2f} dB")
-        print("====================================")
-        print()
+    null_width_azimuth_total = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=float,)
+    null_width_elevation_total = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=float,)
 
-        metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
-            config=config,
-            element_positions_m=element_positions_m,
-            weights=selected_weights,
-            jammer_list=jammer_list,
-            azimuth_scan_deg=azimuth_scan_deg,
-            elevation_scan_deg=elevation_scan_deg,
-            montecarlo_index=mc,
-        )
-        metrics_all.append(metrics_table)
+    for i_jam, num_jammers in enumerate(map(int, config.jammer.num_jammers)):
 
-        if mc == 1:
-            _save_global_outputs(
-                config,
-                output_dir,
-                element_positions_m,
-                snapshot_matrix,
-                covariance_matrix,
-                selected_weights,
-                conventional_w,
-                jammer_table,
-                azimuth_scan_deg,
-                elevation_scan_deg,
-            )
-            _save_jammer_plots(
-                config,
-                output_dir,
-                element_positions_m,
-                selected_weights,
-                jammer_list,
-                azimuth_scan_deg,
-                elevation_scan_deg,
-                mc,
-            )
+        for i_jnr, jnr_db in enumerate(config.jammer.jnr_dB):
 
-            if config.output.save_csv:
-                cuts_dir = output_dir / "output_data" / "jammer_cuts"
-                cuts_dir.mkdir(parents=True, exist_ok=True)
-                for name, table in jammer_cut_tables.items():
-                    save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)
+            jammer_list = build_jammer_case(config, rng, jnr_db, num_jammers)
 
-        summary_rows.append(
-            {
-                "montecarlo_index": mc,
-                "num_metrics_rows": len(metrics_table),
-                "num_jammers": len(jammer_list),
-                "doa_mode": config.simulation.doa_mode,
-                "algorithm": config.beamforming.algorithm,
-            }
-        )
+            for mc in range(1, config.simulation.num_montecarlo + 1):
+
+                snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
+                    config,
+                    element_positions_m,
+                    jammer_list,
+                    rng,
+                )
+                covariance_matrix = compute_sample_covariance(snapshot_matrix)
+                selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list) # Para el beamfoerming
+
+                # Comprobacion diagnostica del JNR realmente generado.
+                # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
+                p_noise = np.mean(np.abs(noise_matrix) ** 2)
+                p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
+                jnr_measured_dB = 10.0 * np.log10(p_jammer / p_noise)
+                print()
+                print("========== VALIDACION JNR ==========")
+                print(f"Potencia ruido  : {10*np.log10(p_noise):.2f} dB")
+                print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
+                print(f"JNR medido      : {jnr_measured_dB:.2f} dB")
+                print("====================================")
+                print()
+
+                metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
+                    config=config,
+                    element_positions_m=element_positions_m,
+                    weights=selected_weights,
+                    jammer_list=jammer_list,
+                    azimuth_scan_deg=azimuth_scan_deg,
+                    elevation_scan_deg=elevation_scan_deg,
+                    montecarlo_index=mc,
+                )
+                metrics_all.append(metrics_table)
+
+                null_width_azimuth_total[i_jam, i_jnr, :] += (metrics_table["null_width_azimuth"])
+                null_width_elevation_total[i_jam, i_jnr, :] += (metrics_table["null_width_elevation"])
+                
+                if mc == 1:
+                    _save_global_outputs(
+                        config,
+                        output_dir,
+                        element_positions_m,
+                        snapshot_matrix,
+                        covariance_matrix,
+                        selected_weights,
+                        conventional_w,
+                        jammer_table,
+                        azimuth_scan_deg,
+                        elevation_scan_deg,
+                    )
+                    _save_jammer_plots(
+                        config,
+                        output_dir,
+                        element_positions_m,
+                        selected_weights,
+                        jammer_list,
+                        azimuth_scan_deg,
+                        elevation_scan_deg,
+                        mc,
+                    )
+
+                    if config.output.save_csv:
+                        cuts_dir = output_dir / "output_data" / "jammer_cuts"
+                        cuts_dir.mkdir(parents=True, exist_ok=True)
+                        for name, table in jammer_cut_tables.items():
+                            save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)
+
+                summary_rows.append(
+                    {
+                        "montecarlo_index": mc,
+                        "num_metrics_rows": len(metrics_table),
+                        "num_jammers": len(jammer_list),
+                        "doa_mode": config.simulation.doa_mode,
+                        "algorithm": config.beamforming.algorithm,
+                    }
+                )
 
     metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
+
+    # Gráficas de ancho de nulo medio.
+    null_width_azimuth_total /= config.simulation.num_montecarlo
+    null_width_elevation_total /= config.simulation.num_montecarlo
+
+    colors = ["royalblue", "darkorange", "green", "crimson"]
+
+    for i_threshold, threshold in enumerate(config.scan.null_thresholds_dB):
+
+        plot_null_width_vs_jnr(
+            jnr_dB=config.jammer.jnr_dB,
+            null_width_table=null_width_azimuth_total[:, :, i_threshold],
+            num_jammers_list=config.jammer.num_jammers,
+            attenuation_threshold=threshold,
+            output_path=(
+                Path(output_dir)
+                / "null_width_vs_jnr"
+                / f"azimuth_threshold_{abs(threshold)}dB.png"
+            ),
+            title="Average Azimuth Null Width vs JNR",
+            ylabel="Null Width Azimuth [deg]",
+        )
+
+        plot_null_width_vs_jnr(
+            jnr_dB=config.jammer.jnr_dB,
+            null_width_table=null_width_elevation_total[:, :, i_threshold],
+            num_jammers_list=config.jammer.num_jammers,
+            attenuation_threshold=threshold,
+            output_path=(
+                Path(output_dir)
+                / "null_width_vs_jnr"
+                / f"elevation_threshold_{abs(threshold)}dB.png"
+            ),
+            title="Average Elevation Null Width vs JNR",
+            ylabel="Null Width Elevation [deg]",
+        )
 
     if config.output.save_csv and not metrics_full.empty:
         metrics_to_save = metrics_full.copy().fillna("N/A")

@@ -204,6 +204,7 @@ class JammerTemplate:
     name: str
     azimuth_deg: float
     elevation_deg: float
+    jnr_dB: float
     signal_type: str = "tone"
     center_frequency_hz: float | None = None
     normalized_frequency: float = 0.0
@@ -219,6 +220,7 @@ class JammerTemplate:
         """
         values = dict(values)
         values["signal_type"] = str(values.get("signal_type", "complex_gaussian")).lower()
+        values["jnr_dB"] = float(values.get("jnr_dB", 0))
         values.setdefault("center_frequency_hz", None)
         values.setdefault("normalized_frequency", 0.0)
         values.setdefault("bandwidth_hz", None)
@@ -242,7 +244,7 @@ class JammerInstance:
 @dataclass(frozen=True)
 class JammerConfig:
     num_jammers: int
-    jnr_dB: float
+    jnr_dB: list[float]
     variable_doa_azimuth_range_deg: tuple[float, float]
     variable_doa_elevation_range_deg: tuple[float, float]
     base_jammers: list[JammerTemplate]
@@ -255,8 +257,17 @@ class JammerConfig:
             values: Diccionario leido desde "jammer_config" del JSON.
         """
         values = dict(values)
-        values["num_jammers"] = int(values["num_jammers"])
-        values["jnr_dB"] = float(values["jnr_dB"])
+
+        if isinstance(values["num_jammers"], (int, float)):
+            values["num_jammers"] = [float(values["num_jammers"])]
+        else:
+            values["num_jammers"] = [float(x) for x in values["num_jammers"]]
+
+        if isinstance(values["jnr_dB"], (int, float)):
+            values["jnr_dB"] = [float(values["jnr_dB"])]
+        else:
+            values["jnr_dB"] = [float(x) for x in values["jnr_dB"]]
+
         values["variable_doa_azimuth_range_deg"] = tuple(float(x) for x in values["variable_doa_azimuth_range_deg"])
         values["variable_doa_elevation_range_deg"] = tuple(float(x) for x in values["variable_doa_elevation_range_deg"])
         values["base_jammers"] = [JammerTemplate.from_dict(x) for x in values["base_jammers"]]

@@ -112,12 +112,6 @@ def validate_project_config(config: ProjectConfig) -> None:
         raise ValueError("elevation_scan_min_deg debe ser <= elevation_scan_max_deg.")
     if config.noise.noise_power_linear < 0:
         raise ValueError("noise_power_linear debe ser >= 0.")
-    if config.jammer.num_jammers < 1:
-        raise ValueError("num_jammers debe ser >= 1.")
-    if config.jammer.num_jammers > config.array.num_elements - 1:
-        raise ValueError("num_jammers debe ser <= num_elements - 1.")
-    if config.jammer.num_jammers > len(config.jammer.base_jammers):
-        raise ValueError("num_jammers supera el numero de base_jammers definidos.")
     if abs(config.array.array_boresight_elevation_deg - 90.0) > 1e-9:
         raise ValueError("Para este ejercicio la CRPA ideal debe apuntar al cenit: array_boresight_elevation_deg=90.")
     if len(config.jammer.variable_doa_azimuth_range_deg) != 2:

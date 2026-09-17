@@ -488,3 +488,81 @@ def plot_temporal_psd_spectrum(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
+
+
+def plot_null_width_vs_jnr(
+    jnr_dB: list[float],
+    null_width_table: np.ndarray,
+    num_jammers_list: list[int],
+    attenuation_threshold: float,
+    output_path: Path,
+    title: str,
+    ylabel: str,
+) -> None:
+    """Dibuja Null Width vs JNR para un attenuation threshold fijo.
+
+    Parametros:
+        jnr_dB: Valores de JNR [dB].
+        null_width_table: Array de forma (n_jammers, n_jnr).
+        num_jammers_list: Lista con el numero de jammers de cada curva.
+        attenuation_threshold: Threshold de atenuacion representado.
+        output_path: Ruta PNG donde guardar la figura.
+        title: Titulo base del grafico.
+        ylabel: Etiqueta del eje Y.
+    """
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    colors = [
+        "royalblue",
+        "darkorange",
+        "crimson",
+        "forestgreen",
+        "purple",
+        "brown",
+    ]
+
+    for i_jam, num_jammers in enumerate(num_jammers_list):
+
+        ax.plot(
+            jnr_dB,
+            null_width_table[i_jam, :],
+            marker="o",
+            markersize=8,
+            linewidth=2,
+            color=colors[i_jam % len(colors)],
+            label=f"{num_jammers} jammer(s)",
+        )
+
+    ax.grid(True, which="major", linestyle="--", alpha=0.6)
+    ax.minorticks_on()
+    ax.grid(True, which="minor", linestyle=":", alpha=0.3)
+
+    ax.set_xlabel(
+        "JNR [dB]",
+        fontsize=10,
+        fontweight="bold",
+    )
+
+    ax.set_ylabel(
+        ylabel,
+        fontsize=10,
+        fontweight="bold",
+    )
+
+    ax.set_title(
+        f"{title}\nAttenuation Threshold = {attenuation_threshold} dB",
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    ax.legend(
+        title="Number of Jammers",
+        loc="best",
+    )
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
