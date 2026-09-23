@@ -17,14 +17,14 @@
     "fft_size": 8192
   },
   "simulation_config": {
-    "num_montecarlo": 2,
+    "num_montecarlo": 1000,
     "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "power_inversion",
-    "desired_azimuth_deg": 40.0,
-    "desired_elevation_deg": 20.0,
-    "diagonal_loading_factor": 0.001,
+    "algorithm": "lcmv",
+    "desired_azimuth_deg": 160.0,
+    "desired_elevation_deg": 85,
+    "diagonal_loading_factor": 1e-05,
     "power_inversion_reference_element": 0
   },
   "scan_config": {
@@ -48,9 +48,14 @@
     "num_jammers": [
       1,
       2,
-      3
+      3,
+      4,
+      5,
+      6
     ],
     "jnr_dB": [
+      5,
+      15,
       25,
       35
     ],
@@ -65,10 +70,10 @@
     "base_jammers": [
       {
         "name": "Jammer_1",
-        "azimuth_deg": 160.0,
-        "elevation_deg": 60.0,
+        "azimuth_deg": 25.0,
+        "elevation_deg": 20.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.05,
         "chirp_frequency": 60000000
       },
@@ -77,50 +82,50 @@
         "azimuth_deg": 80.0,
         "elevation_deg": 40.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.11,
         "chirp_frequency": 60000000
       },
       {
         "name": "Jammer_3",
-        "azimuth_deg": 60.0,
-        "elevation_deg": 70.0,
+        "azimuth_deg": 120.0,
+        "elevation_deg": 80.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.0,
         "chirp_frequency": 60000000
       },
       {
         "name": "Jammer_4",
-        "azimuth_deg": 270.0,
-        "elevation_deg": 10.0,
+        "azimuth_deg": 160.0,
+        "elevation_deg": 60.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.17,
         "chirp_frequency": 60000000
       },
       {
         "name": "Jammer_5",
-        "azimuth_deg": 140.0,
-        "elevation_deg": 50.0,
+        "azimuth_deg": 230.0,
+        "elevation_deg": 30.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.3,
         "chirp_frequency": 60000000
       },
       {
         "name": "Jammer_6",
-        "azimuth_deg": 210.0,
+        "azimuth_deg": 300.0,
         "elevation_deg": 60.0,
         "signal_type": "tone",
-        "center_frequency_hz": 1578620000.0,
+        "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.23,
         "chirp_frequency": 60000000
       }
     ]
   },
   "output_config": {
-    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_{num_jam}Jammers",
+    "output_dir": "results_{algorithm}_DOA_{doa_mode}_CRPA_{steering_model}_{num_jam}_Jammers",
     "save_csv": true,
     "save_npz": false,
     "save_plots": true,

@@ -13,6 +13,8 @@ from .config import JammerInstance, ProjectConfig
 from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_2d_response_grid
 # from .jammers import jammer_center_frequency_hz
 from .jammers import jammer_center_frequency_hz, jammer_wavelength_m
+from numba import njit
+import matplotlib.pyplot as plt
 
 
 def compute_null_depth_dB(
@@ -185,6 +187,93 @@ def circular_azimuth_width_deg(angles_deg: np.ndarray) -> float:
     return float(360.0 - max_gap)
 
 
+@njit(cache=True)
+def flood_fill_region(
+    mask: np.ndarray,
+    start_row: int,
+    start_col: int,
+    wrap_azimuth: bool,
+):
+    n_rows, n_cols = mask.shape
+
+    visited = np.zeros((n_rows, n_cols), dtype=np.uint8)
+
+    max_cells = mask.size
+
+    rows = np.empty(max_cells, dtype=np.int32)
+    cols = np.empty(max_cells, dtype=np.int32)
+
+    # Cada celda puede añadir hasta 4 vecinos
+    max_stack = max_cells * 4
+
+    stack_rows = np.empty(max_stack, dtype=np.int32)
+    stack_cols = np.empty(max_stack, dtype=np.int32)
+
+    stack_size = 1
+    stack_rows[0] = start_row
+    stack_cols[0] = start_col
+
+    count = 0
+
+    while stack_size > 0:
+
+        stack_size -= 1
+
+        row = stack_rows[stack_size]
+        col = stack_cols[stack_size]
+
+        if row < 0 or row >= n_rows:
+            continue
+
+        if col < 0 or col >= n_cols:
+            continue
+
+        if visited[row, col]:
+            continue
+
+        if not mask[row, col]:
+            continue
+
+        visited[row, col] = 1
+
+        rows[count] = row
+        cols[count] = col
+        count += 1
+
+        # Arriba
+        stack_rows[stack_size] = row - 1
+        stack_cols[stack_size] = col
+        stack_size += 1
+
+        # Abajo
+        stack_rows[stack_size] = row + 1
+        stack_cols[stack_size] = col
+        stack_size += 1
+
+        if wrap_azimuth:
+
+            # Izquierda con wrap
+            stack_rows[stack_size] = row
+            stack_cols[stack_size] = (col - 1) % n_cols
+            stack_size += 1
+
+            # Derecha con wrap
+            stack_rows[stack_size] = row
+            stack_cols[stack_size] = (col + 1) % n_cols
+            stack_size += 1
+
+        else:
+
+            stack_rows[stack_size] = row
+            stack_cols[stack_size] = col - 1
+            stack_size += 1
+
+            stack_rows[stack_size] = row
+            stack_cols[stack_size] = col + 1
+            stack_size += 1
+
+    return rows[:count], cols[:count]
+
 def measure_null_region_2d(
     az_grid_deg: np.ndarray,
     el_grid_deg: np.ndarray,
@@ -203,20 +292,11 @@ def measure_null_region_2d(
         jammer_elevation_deg: Elevacion del jammer que define el centro.
         threshold_dB: Umbral maximo para considerar una celda parte del nulo.
     """
-
     jammer_azimuth_deg = wrap_angle_180(jammer_azimuth_deg)
 
-    az_grid_deg = np.asarray(az_grid_deg, dtype=float)
-    el_grid_deg = np.asarray(el_grid_deg, dtype=float)
-    response_dB = np.asarray(response_dB, dtype=float)
-
-    az_delta = ((az_grid_deg - jammer_azimuth_deg + 180.0) % 360.0) - 180.0
-    dist = (
-        az_delta ** 2
-        + (el_grid_deg - jammer_elevation_deg) ** 2
-    )
-
-    start = np.unravel_index(np.argmin(dist), dist.shape)
+    az_axis = az_grid_deg[0, :]
+    el_axis = el_grid_deg[:, 0]
+    start= (np.argmin(np.abs(el_axis - jammer_elevation_deg)),np.argmin(np.abs(((az_axis - jammer_azimuth_deg + 180) % 360) - 180)))
 
     if response_dB[start] > threshold_dB:
         return {
@@ -227,40 +307,38 @@ def measure_null_region_2d(
         }
 
     mask = response_dB <= threshold_dB
-    visited = np.zeros(mask.shape, dtype=bool)
-    az_axis = az_grid_deg[0, :] if az_grid_deg.ndim == 2 and az_grid_deg.shape[1] > 0 else np.asarray([])
-    az_step = float(np.nanmedian(np.abs(np.diff(az_axis)))) if len(az_axis) > 1 else 0.0
-    az_span = float(np.nanmax(az_axis) - np.nanmin(az_axis)) if len(az_axis) > 1 else 0.0
-    wrap_azimuth = len(az_axis) > 1 and az_span >= 360.0 - max(az_step, 1e-9)
 
-    stack = [start]
-    region = []
+    az_step = (
+        float(np.nanmedian(np.abs(np.diff(az_axis))))
+        if len(az_axis) > 1
+        else 0.0
+    )
 
-    while stack:
-        row, col = stack.pop()
+    el_step = (
+        float(np.nanmedian(np.abs(np.diff(el_axis))))
+        if len(el_axis) > 1
+        else 0.0
+    )
 
-        if row < 0 or row >= mask.shape[0]:
-            continue
-        if col < 0 or col >= mask.shape[1]:
-            continue
-        if visited[row, col]:
-            continue
-        if not mask[row, col]:
-            continue
+    az_span = (
+        float(np.nanmax(az_axis) - np.nanmin(az_axis))
+        if len(az_axis) > 1
+        else 0.0
+    )
 
-        visited[row, col] = True
-        region.append((row, col))
+    wrap_azimuth = (
+        len(az_axis) > 1
+        and az_span >= 360.0 - max(az_step, 1e-9)
+    )
 
-        stack.append((row - 1, col))
-        stack.append((row + 1, col))
-        if wrap_azimuth:
-            stack.append((row, (col - 1) % mask.shape[1]))
-            stack.append((row, (col + 1) % mask.shape[1]))
-        else:
-            stack.append((row, col - 1))
-            stack.append((row, col + 1))
+    rows, cols = flood_fill_region(
+        mask,
+        start[0],
+        start[1],
+        wrap_azimuth,
+    )
 
-    if not region:
+    if len(rows) == 0:
         return {
             "null_area_cells_2d": None,
             "null_area_deg2_2d": None,
@@ -268,19 +346,14 @@ def measure_null_region_2d(
             "null_width_elevation_2d_deg": None,
         }
 
-    rows = np.array([p[0] for p in region])
-    cols = np.array([p[1] for p in region])
-
     az_vals = az_grid_deg[rows, cols]
     el_vals = el_grid_deg[rows, cols]
 
-    az_step = float(np.nanmedian(np.abs(np.diff(az_grid_deg[0, :]))))
-    el_step = float(np.nanmedian(np.abs(np.diff(el_grid_deg[:, 0]))))
-
-    area_cells = len(region)
+    area_cells = len(rows)
     area_deg2 = area_cells * az_step * el_step
 
     width_az = circular_azimuth_width_deg(az_vals)
+
     width_el = float(np.max(el_vals) - np.min(el_vals))
 
     if width_az == 0.0:
@@ -295,3 +368,93 @@ def measure_null_region_2d(
         "null_width_azimuth_2d_deg": width_az,
         "null_width_elevation_2d_deg": width_el,
     }
+
+
+def measure_null_widths_from_cuts(
+    config: ProjectConfig,
+    element_positions_m: np.ndarray,
+    weights: np.ndarray,
+    jammer_list: Sequence[JammerInstance],
+    azimuth_scan_deg: np.ndarray,
+    elevation_scan_deg: np.ndarray,
+) -> pd.DataFrame:
+
+    rows = []
+
+    for jammer in jammer_list:
+
+        lambda_jam_m = jammer_wavelength_m(config,jammer,)
+
+        az_cut = compute_azimuth_response_cut(
+            config,
+            element_positions_m,
+            weights,
+            azimuth_scan_deg,
+            fixed_elevation_deg=jammer.elevation_deg,
+            wavelength_m=lambda_jam_m,
+        )
+
+        el_cut = compute_elevation_response_cut(
+            config,
+            element_positions_m,
+            weights,
+            elevation_scan_deg,
+            fixed_azimuth_deg=jammer.azimuth_deg,
+            wavelength_m=lambda_jam_m,
+        )
+
+        az_axis = az_cut["azimuth_deg"].to_numpy(dtype=float)
+        el_axis = el_cut["elevation_deg"].to_numpy(dtype=float)
+
+        az_response = az_cut["response_dB_normalized"].to_numpy(dtype=float)
+        el_response = el_cut["response_dB_normalized"].to_numpy(dtype=float)
+
+        az_idx = np.argmin(np.abs(((az_axis - jammer.azimuth_deg + 180.0) % 360.0) - 180.0))
+        el_idx = np.argmin(np.abs(el_axis - jammer.elevation_deg))
+
+        for threshold in config.scan.null_thresholds_dB:
+
+            width_az = None
+
+            if az_response[az_idx] <= threshold:
+
+                left = az_idx
+
+                while (left > 0 and az_response[left - 1] <= threshold):
+                    left -= 1
+
+                right = az_idx
+
+                while (right < len(az_response) - 1 and az_response[right + 1] <= threshold):
+                    right += 1
+
+                width_az = float(az_axis[right] - az_axis[left])
+
+            width_el = None
+
+            if el_response[el_idx] <= threshold:
+
+                down = el_idx
+
+                while (down > 0 and el_response[down - 1] <= threshold):
+                    down -= 1
+
+                up = el_idx
+
+                while (up < len(el_response) - 1 and el_response[up + 1] <= threshold):
+                    up += 1
+
+                width_el = float(el_axis[up] - el_axis[down])
+
+            rows.append(
+                {
+                    "jammer_name": jammer.name,
+                    "jammer_azimuth_deg": jammer.azimuth_deg,
+                    "jammer_elevation_deg": jammer.elevation_deg,
+                    "attenuation_threshold_dB": threshold,
+                    "null_width_azimuth_deg": width_az,
+                    "null_width_elevation_deg": width_el,
+                }
+            )
+
+    return pd.DataFrame(rows)

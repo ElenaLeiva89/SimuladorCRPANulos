@@ -92,12 +92,6 @@ def compute_lcmv_weights(
 
         # CAMBIO DEL DEPTH DB
         desired_response.append(0.0 + 0.0j)
-        #desired_response.append(0.01 + 0.0j)
-
-    # C = np.column_stack(steering_vectors)
-    # f = np.asarray(desired_response, dtype=complex)
-    # middle = C.conj().T @ R_inv @ C
-    # return R_inv @ C @ np.linalg.pinv(middle) @ f
 
     C = np.column_stack(steering_vectors)
     f = np.asarray(desired_response, dtype=complex)
@@ -117,11 +111,10 @@ def compute_lcmvq_weights(
 
     num_elements = config.array.num_elements
 
-    main_constraint = np.zeros(num_elements, dtype=complex)
-    main_constraint[0] = 1.0 + 0.0j
+    #main_constraint[0] = 1.0 + 0.0j
 
     steering_vectors = []
-    steering_vectors = [main_constraint]
+    #steering_vectors = [main_constraint]
 
     a_des = steering_vector(
         config,
@@ -132,7 +125,7 @@ def compute_lcmvq_weights(
     steering_vectors.append(a_des)
 
     desired_response = [1.0 + 0.0j]
-    desired_response = [1.0 + 0.0j, 1.0 + 0.0j]
+    #desired_response = [1.0 + 0.0j, 1.0 + 0.0j]
 
     for jammer in jammer_list:
         # a_jam = steering_vector(
@@ -153,8 +146,7 @@ def compute_lcmvq_weights(
         )
         steering_vectors.append(a_jam)
         # CAMBIO DEL DEPTH DB
-        desired_response.append(0.00001 + 0.0j)
-        #desired_response.append(0.01 + 0.0j)
+        desired_response.append(0.0+ 0.0j)
 
     C = np.column_stack(steering_vectors)
     f = np.asarray(desired_response, dtype=complex)

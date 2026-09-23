@@ -34,10 +34,11 @@ from crpa_sim.io_utils import (
     save_run_log,
 )
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix, jammer_center_frequency_hz, jammer_wavelength_m
-from crpa_sim.null_metrics import compute_null_metrics_for_jammers
+from crpa_sim.null_metrics import compute_null_metrics_for_jammers, measure_null_widths_from_cuts
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
+    compute_elevation_response_cut,
     compute_elevation_response_cut_for_plot,
     conventional_weights,
     make_scan_vectors,
@@ -52,6 +53,8 @@ from crpa_sim.plots import (
     plot_temporal_psd_spectrum,
     plot_null_width_vs_jnr
 )
+from crpa_sim.array_model import steering_vector
+import cProfile
 
 def _save_global_outputs(
     config: ProjectConfig,
@@ -104,7 +107,7 @@ def _save_global_outputs(
         )
 
     if config.output.save_plots:
-        plot_array_geometry(element_positions_m, output_dir / "array_geometry.png")
+        #plot_array_geometry(element_positions_m, output_dir / "array_geometry.png")
 
         radiation_az = compute_azimuth_response_cut(
             config,
@@ -169,6 +172,8 @@ def _save_jammer_plots(
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
     montecarlo_index: int,
+    jnr_db: float
+    
 ) -> None:
     """Genera plots especificos por jammer para la primera iteracion.
 
@@ -185,8 +190,8 @@ def _save_jammer_plots(
     if not config.output.save_plots or montecarlo_index != 1:
         return
 
-    jammer_plots_dir = output_dir / "jammer_plots"
-    jammer_plots_dir.mkdir(parents=True, exist_ok=True)
+    jammer_plots_dir = output_dir / f"jammer_plots_{jnr_db}"
+    #jammer_plots_dir.mkdir(parents=True, exist_ok=True)
 
     for idx, jammer in enumerate(jammer_list, start=1):
         tag = f"{jammer.name}"
@@ -231,19 +236,11 @@ def _save_jammer_plots(
             fixed_azimuth_deg=jammer.azimuth_deg,
         )
         
-
     jammer_info_3d = [
         (jammer.name, jammer.azimuth_deg, jammer.elevation_deg, idx - 1)
         for idx, jammer in enumerate(jammer_list, start=1)
     ]
 
-    # radiation_grid = compute_2d_response_grid(
-    #     config,
-    #     element_positions_m,
-    #     selected_weights,
-    #     azimuth_scan_deg,
-    #     elevation_scan_deg,
-    # )
     desired_info = (
         "Desired",
         config.beamforming.desired_azimuth_deg,
@@ -262,8 +259,8 @@ def _save_jammer_plots(
             elevation_scan_deg,
             wavelength_m=wavelength_m,
         )
-
-        jammer_info = [
+        
+        """jammer_info = [
             (
                 jammer.name,
                 jammer.azimuth_deg,
@@ -271,7 +268,7 @@ def _save_jammer_plots(
                 idx - 1,
             )
         ]
-
+        
         plot_heatmap(
             radiation_grid,
             jammer_plots_dir / f"{jammer.name}_array_factor_heatmap.png",
@@ -299,11 +296,12 @@ def _save_jammer_plots(
         "Patron 3D Esfericas CRPA para algoritmo " + config.beamforming.algorithm,
         adaptive_label=config.beamforming.algorithm,
         jammer_info=jammer_info_3d,
-    )
+    )"""
+    
     plot_heatmap(
         radiation_grid,
-        output_dir / "array_factor_heatmap.png",
-        f"Heatmap CRPA para algoritmo {config.beamforming.algorithm} - Mapa 2D",
+        output_dir / f"array_factor_heatmap_{len(jammer_list)}_jammers.png",
+        f"Heatmap CRPA para algoritmo {config.beamforming.algorithm}, {len(jammer_list)} Jammers- Mapa 2D",
         adaptive_label=config.beamforming.algorithm,
         jammer_info=jammer_info_3d,
         desired_info=desired_info,
@@ -402,7 +400,7 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
 
             jammer_list = build_jammer_case(config, rng, jnr_db, num_jammers)
 
-            for mc in range(1, config.simulation.num_montecarlo + 1):
+            for mc in range(1, config.simulation.num_montecarlo + 1) :
 
                 snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
                     config,
@@ -410,23 +408,10 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                     jammer_list,
                     rng,
                 )
-                covariance_matrix = compute_sample_covariance(snapshot_matrix)
+                #covariance_matrix = compute_sample_covariance(snapshot_matrix)
                 selected_weights = compute_weights(config, snapshot_matrix, element_positions_m, jammer_list) # Para el beamfoerming
 
-                # Comprobacion diagnostica del JNR realmente generado.
-                # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
-                p_noise = np.mean(np.abs(noise_matrix) ** 2)
-                p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
-                jnr_measured_dB = 10.0 * np.log10(p_jammer / p_noise)
-                print()
-                print("========== VALIDACION JNR ==========")
-                print(f"Potencia ruido  : {10*np.log10(p_noise):.2f} dB")
-                print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
-                print(f"JNR medido      : {jnr_measured_dB:.2f} dB")
-                print("====================================")
-                print()
-
-                metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
+                """metrics_table, jammer_cut_tables = compute_null_metrics_for_jammers(
                     config=config,
                     element_positions_m=element_positions_m,
                     weights=selected_weights,
@@ -435,13 +420,44 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                     elevation_scan_deg=elevation_scan_deg,
                     montecarlo_index=mc,
                 )
-                metrics_all.append(metrics_table)
+                metrics_all.append(metrics_table)"""
+ 
+                #null_width_azimuth_total[i_jam, i_jnr, :] += (metrics_table["null_width_azimuth"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
+                #null_width_elevation_total[i_jam, i_jnr, :] += (metrics_table["null_width_elevation"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))    
 
-                null_width_azimuth_total[i_jam, i_jnr, :] += (metrics_table["null_width_azimuth"])
-                null_width_elevation_total[i_jam, i_jnr, :] += (metrics_table["null_width_elevation"])
-                
+                null_widths_table = measure_null_widths_from_cuts(
+                    config=config,
+                    element_positions_m=element_positions_m,
+                    weights=selected_weights,
+                    jammer_list=jammer_list,
+                    azimuth_scan_deg=azimuth_scan_deg,
+                    elevation_scan_deg=elevation_scan_deg,
+                )
+
+                null_width_azimuth_total[i_jam, i_jnr, :] += (null_widths_table["null_width_azimuth_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
+                null_width_elevation_total[i_jam, i_jnr, :] += (null_widths_table["null_width_elevation_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))     
+
+                summary_rows.append(
+                    {
+                        "montecarlo_index": mc,
+                        #"num_metrics_rows": len(metrics_table),
+                        "num_jammers": len(jammer_list),
+                        "doa_mode": config.simulation.doa_mode,
+                        "algorithm": config.beamforming.algorithm,
+                    })
+
                 if mc == 1:
-                    _save_global_outputs(
+
+                    # Comprobacion diagnostica del JNR realmente generado.
+                    # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
+                    p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
+                    print()
+                    print("========== VALIDACION JNR ==========")
+                    print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
+                    print("====================================")
+                    print()
+
+                    """_save_global_outputs(
                         config,
                         output_dir,
                         element_positions_m,
@@ -452,7 +468,8 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                         jammer_table,
                         azimuth_scan_deg,
                         elevation_scan_deg,
-                    )
+                    )"""
+
                     _save_jammer_plots(
                         config,
                         output_dir,
@@ -462,25 +479,17 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                         azimuth_scan_deg,
                         elevation_scan_deg,
                         mc,
+                        jnr_db
                     )
-
-                    if config.output.save_csv:
+     
+                    """if config.output.save_csv:
                         cuts_dir = output_dir / "output_data" / "jammer_cuts"
                         cuts_dir.mkdir(parents=True, exist_ok=True)
                         for name, table in jammer_cut_tables.items():
-                            save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)
+                            save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)"""
 
-                summary_rows.append(
-                    {
-                        "montecarlo_index": mc,
-                        "num_metrics_rows": len(metrics_table),
-                        "num_jammers": len(jammer_list),
-                        "doa_mode": config.simulation.doa_mode,
-                        "algorithm": config.beamforming.algorithm,
-                    }
-                )
 
-    metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
+    #metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
 
     # Gráficas de ancho de nulo medio.
     null_width_azimuth_total /= config.simulation.num_montecarlo
@@ -518,9 +527,9 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
             ylabel="Null Width Elevation [deg]",
         )
 
-    if config.output.save_csv and not metrics_full.empty:
+    """if config.output.save_csv and not metrics_full.empty:
         metrics_to_save = metrics_full.copy().fillna("N/A")
-        save_dataframe(metrics_to_save, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
+        save_dataframe(metrics_to_save, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)"""
 
     save_run_log(config, output_dir, summary_rows)
     print_generated_files(output_dir)
@@ -538,3 +547,23 @@ if __name__ == "__main__":
     )
 
     run_project(args.config)
+
+"""
+if __name__ == "__main__":
+    args = parse_command_line()
+
+    update_steering_configuration(
+            config_path=args.config,
+            steering_model=args.steering_model,
+            phase_mat=args.phase_mat,
+            amplitude_mat=args.amplitude_mat,
+        )
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+
+    run_project(args.config)
+
+    profiler.disable()
+    profiler.dump_stats("profile.prof")
+"""

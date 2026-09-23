@@ -280,6 +280,7 @@ def plot_heatmap(
     )
 
     jammer_colors = ["red", "orange", "magenta", "purple", "lime", "yellow"]
+
     if jammer_info:
         for j_idx, item in enumerate(jammer_info):
             jammer_name, az, el = item[:3]

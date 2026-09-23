@@ -150,7 +150,7 @@ def generate_received_snapshot_matrix(
     rows = []
 
     for idx, jammer in enumerate(jammer_list, start=1):
-        p_jam = jammer_power_from_jnr(config.noise.noise_power_linear, jammer.jnr_dB)
+        p_jam = float(jammer_power_from_jnr(config.noise.noise_power_linear, jammer.jnr_dB))
         #a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg)
         # f_jam_hz = jammer_center_frequency_hz(config, jammer)
         # lambda_jam_m = config.signal.speed_of_light_m_s / f_jam_hz
