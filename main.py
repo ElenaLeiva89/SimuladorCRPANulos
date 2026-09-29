@@ -34,7 +34,7 @@ from crpa_sim.io_utils import (
     save_run_log,
 )
 from crpa_sim.jammers import build_jammer_case, generate_received_snapshot_matrix, jammer_center_frequency_hz, jammer_wavelength_m
-from crpa_sim.null_metrics import compute_null_metrics_for_jammers, measure_null_widths_from_cuts
+from crpa_sim.null_metrics import compute_null_metrics_for_jammers, measure_null_widths_from_cuts, compute_jammer_metrics_v2
 from crpa_sim.patterns import (
     compute_2d_response_grid,
     compute_azimuth_response_cut,
@@ -51,7 +51,7 @@ from crpa_sim.plots import (
     plot_pattern_azimuth,
     plot_pattern_elevation,
     plot_temporal_psd_spectrum,
-    plot_null_width_vs_jnr
+    plot_metrics_vs_jnr
 )
 from crpa_sim.array_model import steering_vector
 import cProfile
@@ -394,13 +394,22 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
     null_width_azimuth_total = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=float,)
     null_width_elevation_total = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=float,)
 
+    null_width_azimuth_count = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=int,)
+    null_width_elevation_count = np.zeros((n_jammers, n_jnr, n_thresholds),dtype=int,)
+
     for i_jam, num_jammers in enumerate(map(int, config.jammer.num_jammers)):
 
         for i_jnr, jnr_db in enumerate(config.jammer.jnr_dB):
 
-            jammer_list = build_jammer_case(config, rng, jnr_db, num_jammers)
+            print(
+                f"\nRUNNING "
+                f"[Jammers={num_jammers}] "
+                f"[JNR={jnr_db} dB]\n"
+            )
 
             for mc in range(1, config.simulation.num_montecarlo + 1) :
+
+                jammer_list = build_jammer_case(config, rng, jnr_db, num_jammers)
 
                 snapshot_matrix, jammer_table, noise_matrix, jammer_matrix = generate_received_snapshot_matrix(
                     config,
@@ -419,13 +428,25 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                     azimuth_scan_deg=azimuth_scan_deg,
                     elevation_scan_deg=elevation_scan_deg,
                     montecarlo_index=mc,
-                )
-                metrics_all.append(metrics_table)"""
+                )"""
  
                 #null_width_azimuth_total[i_jam, i_jnr, :] += (metrics_table["null_width_azimuth"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
                 #null_width_elevation_total[i_jam, i_jnr, :] += (metrics_table["null_width_elevation"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))    
 
-                null_widths_table = measure_null_widths_from_cuts(
+                metrics_table = compute_jammer_metrics_v2(
+                    config=config,
+                    element_positions_m=element_positions_m,
+                    weights=selected_weights,
+                    jammer_list=jammer_list,
+                    azimuth_scan_deg=azimuth_scan_deg,
+                    elevation_scan_deg=elevation_scan_deg,
+                    jnr_db=jnr_db,
+                    num_jammers= len(jammer_list),
+                )
+
+                metrics_all.append(metrics_table)
+
+                """null_widths_table = measure_null_widths_from_cuts(
                     config=config,
                     element_positions_m=element_positions_m,
                     weights=selected_weights,
@@ -434,8 +455,17 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                     elevation_scan_deg=elevation_scan_deg,
                 )
 
-                null_width_azimuth_total[i_jam, i_jnr, :] += (null_widths_table["null_width_azimuth_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
-                null_width_elevation_total[i_jam, i_jnr, :] += (null_widths_table["null_width_elevation_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))     
+                az_widths = (null_widths_table["null_width_azimuth_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
+                el_widths = (null_widths_table["null_width_elevation_deg"].to_numpy().reshape(num_jammers, n_thresholds).mean(axis=0))
+
+                valid_az = ~np.isnan(az_widths)
+                valid_el = ~np.isnan(el_widths)
+
+                null_width_azimuth_total[i_jam, i_jnr, valid_az] += (az_widths[valid_az])
+                null_width_elevation_total[i_jam, i_jnr, valid_el] += (el_widths[valid_el])
+
+                null_width_azimuth_count[i_jam, i_jnr, valid_az] += 1
+                null_width_elevation_count[i_jam, i_jnr, valid_el] += 1"""
 
                 summary_rows.append(
                     {
@@ -447,15 +477,6 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                     })
 
                 if mc == 1:
-
-                    # Comprobacion diagnostica del JNR realmente generado.
-                    # Con snapshots finitos puede fluctuar ligeramente respecto al JNR configurado.
-                    p_jammer = np.mean(np.abs(jammer_matrix) ** 2)
-                    print()
-                    print("========== VALIDACION JNR ==========")
-                    print(f"Potencia jammer : {10*np.log10(p_jammer):.2f} dB")
-                    print("====================================")
-                    print()
 
                     """_save_global_outputs(
                         config,
@@ -488,48 +509,47 @@ def run_project(config_path: Path = Path("input_config.json")) -> None:
                         for name, table in jammer_cut_tables.items():
                             save_dataframe(table, cuts_dir / f"{name}.csv", config.output.csv_separator, config.output.csv_decimal)"""
 
+    metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
 
-    #metrics_full = pd.concat(metrics_all, ignore_index=True) if metrics_all else pd.DataFrame()
+    """null_width_azimuth_total = np.divide(
+        null_width_azimuth_total,
+        null_width_azimuth_count,
+        out=np.full_like(
+            null_width_azimuth_total,
+            np.nan,
+        ),
+        where=null_width_azimuth_count > 0,
+    )
 
-    # Gráficas de ancho de nulo medio.
-    null_width_azimuth_total /= config.simulation.num_montecarlo
-    null_width_elevation_total /= config.simulation.num_montecarlo
+    null_width_elevation_total = np.divide(
+        null_width_elevation_total,
+        null_width_elevation_count,
+        out=np.full_like(
+            null_width_elevation_total,
+            np.nan,
+        ),
+        where=null_width_elevation_count > 0,
+    )"""
 
-    colors = ["royalblue", "darkorange", "green", "crimson"]
+    # GUARDAR RESULTADOS
 
-    for i_threshold, threshold in enumerate(config.scan.null_thresholds_dB):
+    plot_metrics_vs_jnr(
+        metrics_df=metrics_full,
+        metric_columns=["attenuation_cone_2deg_dB","attenuation_cone_5deg_dB","attenuation_cone_10deg_dB",],
+        ylabel="Attenuation [dB]",
+        output_path=(output_dir / "metrics" / "attenuation_cones.png"),
+    )
 
-        plot_null_width_vs_jnr(
-            jnr_dB=config.jammer.jnr_dB,
-            null_width_table=null_width_azimuth_total[:, :, i_threshold],
-            num_jammers_list=config.jammer.num_jammers,
-            attenuation_threshold=threshold,
-            output_path=(
-                Path(output_dir)
-                / "null_width_vs_jnr"
-                / f"azimuth_threshold_{abs(threshold)}dB.png"
-            ),
-            title="Average Azimuth Null Width vs JNR",
-            ylabel="Null Width Azimuth [deg]",
-        )
+    plot_metrics_vs_jnr(
+        metrics_df=metrics_full,
+        metric_columns=["percent_space_below_3dB","percent_space_below_10dB","percent_space_below_20dB","percent_space_below_30dB","percent_space_below_40dB"],
+        ylabel="Percentage (%)",
+        output_path=(output_dir / "metrics" / "attenuation_percentages.png"),
+    )
 
-        plot_null_width_vs_jnr(
-            jnr_dB=config.jammer.jnr_dB,
-            null_width_table=null_width_elevation_total[:, :, i_threshold],
-            num_jammers_list=config.jammer.num_jammers,
-            attenuation_threshold=threshold,
-            output_path=(
-                Path(output_dir)
-                / "null_width_vs_jnr"
-                / f"elevation_threshold_{abs(threshold)}dB.png"
-            ),
-            title="Average Elevation Null Width vs JNR",
-            ylabel="Null Width Elevation [deg]",
-        )
-
-    """if config.output.save_csv and not metrics_full.empty:
+    if config.output.save_csv and not metrics_full.empty:
         metrics_to_save = metrics_full.copy().fillna("N/A")
-        save_dataframe(metrics_to_save, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)"""
+        save_dataframe(metrics_to_save, output_dir / "null_metrics_by_jammer.csv", config.output.csv_separator, config.output.csv_decimal)
 
     save_run_log(config, output_dir, summary_rows)
     print_generated_files(output_dir)

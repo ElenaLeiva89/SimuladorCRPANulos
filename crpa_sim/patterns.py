@@ -188,8 +188,8 @@ def compute_2d_response_grid(
 
     response_abs = np.abs(response_complex).reshape(az_grid.shape)
     response_power = response_abs**2
-    with np.errstate(divide="ignore"):
-        response_power_dB = 10.0 * np.log10(response_power)
+
+    response_power_dB = 10.0 * np.log10(np.maximum(response_power,1e-20,))
 
     return {
         "azimuth_deg": az_grid,

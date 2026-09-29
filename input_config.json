@@ -21,7 +21,7 @@
     "doa_mode": "fixed"
   },
   "beamforming_config": {
-    "algorithm": "lcmv",
+    "algorithm": "power_inversion",
     "desired_azimuth_deg": 160.0,
     "desired_elevation_deg": 85,
     "diagonal_loading_factor": 1e-05,
@@ -55,8 +55,7 @@
     ],
     "jnr_dB": [
       5,
-      15,
-      25,
+      20,
       35
     ],
     "variable_doa_azimuth_range_deg": [
@@ -89,7 +88,7 @@
       {
         "name": "Jammer_3",
         "azimuth_deg": 120.0,
-        "elevation_deg": 80.0,
+        "elevation_deg": 70.0,
         "signal_type": "tone",
         "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.0,
@@ -98,7 +97,7 @@
       {
         "name": "Jammer_4",
         "azimuth_deg": 160.0,
-        "elevation_deg": 60.0,
+        "elevation_deg": 55.0,
         "signal_type": "tone",
         "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.17,
@@ -107,7 +106,7 @@
       {
         "name": "Jammer_5",
         "azimuth_deg": 230.0,
-        "elevation_deg": 30.0,
+        "elevation_deg": 35.0,
         "signal_type": "tone",
         "center_frequency_hz": 1575420000.0,
         "normalized_frequency": 0.3,
