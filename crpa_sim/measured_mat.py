@@ -39,7 +39,7 @@ class MeasuredSteeringDatabase:
     # [azimut, elevación, diferencia, frecuencia]
     phase_deg: np.ndarray
     amplitude_dB: np.ndarray
-
+    field_complex: np.ndarray
     azimuths_deg: np.ndarray
     elevations_deg: np.ndarray
     frequencies_hz: np.ndarray
@@ -204,7 +204,6 @@ def _check_equal_axis(
         )
 
 
-@lru_cache(maxsize=4)
 def load_measured_steering_database(
     phase_mat_path: str,
     amplitude_mat_path: str,
@@ -362,56 +361,17 @@ def load_measured_steering_database(
     if amplitude_dB.shape[2] != 6:
         raise ValueError("La tabla de amplitud debe contener exactamente seis diferencias respecto al elemento de referencia.")
 
+    field_complex = (10.0 ** (amplitude_dB / 20.0)* np.exp(1j * np.deg2rad(phase_deg)))
+    
     return MeasuredSteeringDatabase(
         phase_deg=phase_deg,
         amplitude_dB=amplitude_dB,
+        field_complex=field_complex,
         azimuths_deg=phase_azimuths,
         elevations_deg=phase_elevations,
         frequencies_hz=phase_frequencies_hz,
         polarization=polarization,
     )
-
-
-def _nearest_circular_azimuth_index(
-    azimuth_axis_deg: np.ndarray,
-    target_azimuth_deg: float,
-) -> int:
-    """Obtiene el azimut tabulado más próximo considerando 0/360."""
-    delta = (azimuth_axis_deg - target_azimuth_deg + 180.0) % 360.0 - 180.0
-
-    return int(np.argmin(np.abs(delta)))  
-
-
-def _nearest_index(
-    axis: np.ndarray,
-    target: float,
-) -> int:
-    """Obtiene el índice del valor más próximo de un eje."""
-    return int(np.argmin(np.abs(axis - target)))
-
-
-def _frequency_interpolation_indices(
-    frequency_axis_hz: np.ndarray,
-    target_frequency_hz: float,
-) -> tuple[int, int, float]:
-    """Devuelve índices inferior/superior y factor de interpolación."""
-
-    if target_frequency_hz <= frequency_axis_hz[0]:
-        return 0, 0, 0.0
-
-    if target_frequency_hz >= frequency_axis_hz[-1]:
-        last = len(frequency_axis_hz) - 1
-        return last, last, 0.0
-
-    upper = int(np.searchsorted(frequency_axis_hz, target_frequency_hz, side="right",))
-    lower = upper - 1
-
-    frequency_low = frequency_axis_hz[lower]
-    frequency_high = frequency_axis_hz[upper]
-    alpha = (target_frequency_hz - frequency_low) / (frequency_high - frequency_low)
-
-    return lower, upper, float(alpha)
-
 
 def _interpolation_indices(
     search_array: np.ndarray,
@@ -519,3 +479,75 @@ def polarization_from_mat_filename(path_text: str) -> str:
         raise ValueError(f"Polarización no soportada en {filename}: {polarization}")
 
     return polarization
+
+def measured_steering_vector_nearest_angle(
+    database: MeasuredSteeringDatabase,
+    azimuth_deg: float,
+    elevation_deg: float,
+    frequency_hz: float,
+) -> np.ndarray:
+    """
+    Steering vector usando:
+
+    - Vecino más cercano en azimut.
+    - Vecino más cercano en elevación.
+    - Interpolación lineal sólo en frecuencia.
+    """
+
+    if frequency_hz <= 0.0:
+        raise ValueError(
+            "frequency_hz debe ser mayor que cero."
+        )
+
+    azimuth_deg = azimuth_deg % 360.0
+
+    # ==================================================
+    # Azimut: índice por round
+    # ==================================================
+
+    az_step = (database.azimuths_deg[1] - database.azimuths_deg[0])
+
+    az_half_step = az_step / 2.0
+    az_idx = int(((azimuth_deg + az_half_step) / az_step)) % len(database.azimuths_deg)
+    
+    # ==================================================
+    # Elevación: índice por round
+    # ==================================================
+
+    el_step = (database.elevations_deg[1]- database.elevations_deg[0])
+
+    el_half_step = el_step / 2.0
+    el_idx = int((elevation_deg- database.elevations_deg[0]+ el_half_step)/ el_step)
+
+    # ==================================================
+    # Frecuencia: interpolación lineal
+    # ==================================================
+
+    freq_low, freq_high, freq_alpha = (_interpolation_indices(database.frequencies_hz,frequency_hz,))
+
+    e0 = database.field_complex[
+        az_idx,
+        el_idx,
+        :,
+        freq_low,
+    ]
+
+    e1 = database.field_complex[
+        az_idx,
+        el_idx,
+        :,
+        freq_high,
+    ]
+
+    # ==================================================
+    # Sólo frecuencia
+    # ==================================================
+
+    field_interp = (e0+ freq_alpha * (e1 - e0))
+
+    steering = np.empty(7,dtype=complex,)
+
+    steering[0] = 1.0 + 0.0j
+    steering[1:] = field_interp
+
+    return steering

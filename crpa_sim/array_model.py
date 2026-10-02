@@ -32,6 +32,8 @@ from .config import ArrayConfig, ProjectConfig
 from .measured_mat import (
     load_measured_steering_database,
     measured_steering_vector,
+    measured_steering_vector_nearest_angle,
+    MeasuredSteeringDatabase
 )
 
 
@@ -319,23 +321,25 @@ def steering_vector_measured(
     azimuth_deg: float,
     elevation_deg: float,
     frequency_hz: float,
+    database: MeasuredSteeringDatabase
 ) -> np.ndarray:
     """Devuelve steering medido para dirección y frecuencia concretas."""
 
-    phase_file = config.array.measured_phase_mat_file
-    amplitude_file = config.array.measured_amplitude_mat_file
+    # Full interpolacion
+    """return measured_steering_vector(
+        database=database,
+        azimuth_deg=azimuth_deg,
+        elevation_deg=elevation_deg,
+        frequency_hz=frequency_hz,
+    )"""
 
-    if not phase_file or not amplitude_file:
-        raise ValueError("El modelo measured requiere los ficheros MAT de fase y amplitud.")
-
-    database = load_measured_steering_database(phase_file, amplitude_file,)
-    return measured_steering_vector(
+    # Interpolacion solo frecuencia
+    return measured_steering_vector_nearest_angle(
         database=database,
         azimuth_deg=azimuth_deg,
         elevation_deg=elevation_deg,
         frequency_hz=frequency_hz,
     )
-
 
 # def steering_vector(
 #     config: ProjectConfig,
@@ -360,6 +364,7 @@ def steering_vector(
     azimuth_deg: float,
     elevation_deg: float,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> np.ndarray:
     """Devuelve el steering ideal o medido para una frecuencia concreta."""
 
@@ -375,6 +380,6 @@ def steering_vector(
     if config.array.steering_model == "measured":
         frequency_hz = (config.signal.speed_of_light_m_s / wavelength_m)
 
-        return steering_vector_measured(config=config, azimuth_deg=azimuth_deg, elevation_deg=elevation_deg, frequency_hz=frequency_hz,)
+        return steering_vector_measured(config=config, azimuth_deg=azimuth_deg, elevation_deg=elevation_deg, frequency_hz=frequency_hz, database=database)
 
     raise ValueError(f"Modelo steering no soportado: "f"{config.array.steering_model}")

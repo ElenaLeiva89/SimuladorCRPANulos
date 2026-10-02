@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from .array_model import steering_vector
 from .config import ProjectConfig
+from .measured_mat import MeasuredSteeringDatabase, _interpolation_indices
 
 
 def conventional_weights(config: ProjectConfig, element_positions_m: np.ndarray) -> np.ndarray:
@@ -34,6 +35,7 @@ def _evaluate_response_complex_for_angles(
     azimuth_deg_array: np.ndarray,
     elevation_deg_array: np.ndarray,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> np.ndarray:
     """Evalua B=w^H a(az, el) devolviendo valores complejos.
 
@@ -55,7 +57,7 @@ def _evaluate_response_complex_for_angles(
     values = []
     for az, el in zip(azimuth_deg_array, elevation_deg_array):
         # a = steering_vector(config, element_positions_m, float(az), float(el))
-        a = steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m,)
+        a = steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m, database=database)
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
             values.append(weights @ a)
         else:
@@ -71,8 +73,11 @@ def evaluate_response_for_angles(
     elevation_deg_array: np.ndarray,
     normalize: bool = True,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
+
 ) -> pd.DataFrame:
     """Evalua B=w^H a(az, el) en una lista de pares angulares."""
+    
     values = _evaluate_response_complex_for_angles(
         config,
         element_positions_m,
@@ -80,6 +85,7 @@ def evaluate_response_for_angles(
         azimuth_deg_array,
         elevation_deg_array,
         wavelength_m=wavelength_m,
+        database=database
     )
 
     response_abs = np.abs(values)
@@ -116,10 +122,11 @@ def compute_azimuth_response_cut(
     azimuth_scan_deg: np.ndarray,
     fixed_elevation_deg: float,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> pd.DataFrame:
     """Calcula un corte de patron variando azimut con elevacion fija."""
     elevations = np.full_like(azimuth_scan_deg, fixed_elevation_deg, dtype=float)
-    return evaluate_response_for_angles(config, element_positions_m, weights, azimuth_scan_deg, elevations, wavelength_m=wavelength_m)
+    return evaluate_response_for_angles(config, element_positions_m, weights, azimuth_scan_deg, elevations, wavelength_m=wavelength_m, database=database)
 
 
 def compute_elevation_response_cut(
@@ -142,6 +149,7 @@ def compute_2d_response_grid(
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> dict[str, np.ndarray]:
     """Evalua el patron en una malla 2D azimut/elevacion."""
     az_grid, el_grid = np.meshgrid(azimuth_scan_deg, elevation_scan_deg, indexing="xy")
@@ -171,11 +179,35 @@ def compute_2d_response_grid(
             response_complex = steering @ weights
         else:
             response_complex = steering @ np.conjugate(weights)
+    
     elif config.array.steering_model == "measured":
 
+        freq_low, freq_high, freq_alpha = (_interpolation_indices(database.frequencies_hz,config.signal.speed_of_light_m_s / wavelength_m,))
+
         steering_rows = []
+
+        az_step = (database.azimuths_deg[1] - database.azimuths_deg[0])
+        el_step = (database.elevations_deg[1]- database.elevations_deg[0])
+
+        az_half_step = az_step / 2.0
+        el_half_step = el_step / 2.0
+
         for az, el in zip(az_flat, el_flat):
-            steering_rows.append(steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m,))
+
+            az_idx = int(((az + az_half_step) / az_step)) % len(database.azimuths_deg)
+            el_idx = int((el- database.elevations_deg[0]+ el_half_step)/ el_step)
+
+            e0 = database.field_complex[az_idx,el_idx,:,freq_low,]
+            e1 = database.field_complex[az_idx,el_idx,:,freq_high,]
+
+            field_interp = e0 + freq_alpha * (e1 - e0)
+
+            steering = np.empty(7, dtype=np.complex128)
+            steering[0] = 1.0
+            steering[1:] = field_interp
+
+            steering_rows.append(steering)
+        
         steering = np.vstack(steering_rows)
 
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
@@ -222,6 +254,7 @@ def compute_elevation_response_cut_for_plot(
     elevation_scan_deg: np.ndarray,
     fixed_azimuth_deg: float,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> pd.DataFrame:
     """Construye el corte vertical simetrico que espera el plot polar.
 
@@ -247,7 +280,9 @@ def compute_elevation_response_cut_for_plot(
         az_left_vec,
         el_left,
         wavelength_m=wavelength_m,
+        database=database
     )
+
     left["polar_theta_deg"] = -90.0 + left["elevation_deg"]
     left["plot_side"] = "left"
     left["cut_azimuth_deg"] = az_left
@@ -262,7 +297,9 @@ def compute_elevation_response_cut_for_plot(
         az_right_vec,
         el_right,
         wavelength_m=wavelength_m,
+        database=database
     )
+
     right["polar_theta_deg"] = 90.0 - right["elevation_deg"]
     right["plot_side"] = "right"
     right["cut_azimuth_deg"] = az_right

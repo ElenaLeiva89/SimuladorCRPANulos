@@ -16,6 +16,7 @@ import random
 
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
+from .measured_mat import MeasuredSteeringDatabase
 
 
 def jammer_power_from_jnr(noise_power_linear: float, jnr_dB: float) -> float:
@@ -129,6 +130,7 @@ def generate_received_snapshot_matrix(
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
     rng: np.random.Generator,
+    database: MeasuredSteeringDatabase
 ) -> tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray]:
     """Genera la matriz recibida X = ruido + suma_j a_j s_j.
 
@@ -157,9 +159,7 @@ def generate_received_snapshot_matrix(
         #lambda_jam_m = jammer_wavelength_m(config, jammer)
         frequency_hz = jammer_center_frequency_hz(config, jammer)
         wavelength_m = jammer_wavelength_m(config, jammer)
-        a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg, 
-                                #wavelength_m=lambda_jam_m, 
-                                wavelength_m=wavelength_m,)
+        a_jam = steering_vector(config, element_positions_m, jammer.azimuth_deg, jammer.elevation_deg, wavelength_m=wavelength_m, database=database)
         s_jam = generate_jammer_baseband_signal(jammer, config.signal.num_snapshots, p_jam, rng)
         X_jam = a_jam[:, None] * s_jam[None, :]
         X_jammer_total += X_jam
@@ -171,11 +171,6 @@ def generate_received_snapshot_matrix(
 
     return X, pd.DataFrame(rows), X_noise, X_jammer_total
 
-
-# def jammer_center_frequency_hz(config: ProjectConfig, jammer: JammerInstance) -> float:
-#     """Frecuencia RF central del jammer."""
-
-#     return config.signal.carrier_frequency_hz + jammer.normalized_frequency * config.signal.sample_rate_hz
 
 def jammer_center_frequency_hz(config: ProjectConfig, jammer: JammerInstance,) -> float:
     """Devuelve la frecuencia RF central del jammer."""

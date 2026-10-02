@@ -15,6 +15,7 @@ from .patterns import compute_azimuth_response_cut, compute_elevation_response_c
 from .jammers import jammer_center_frequency_hz, jammer_wavelength_m
 from numba import njit
 import matplotlib.pyplot as plt
+from .measured_mat import MeasuredSteeringDatabase
 
 
 def compute_null_depth_dB(
@@ -44,7 +45,6 @@ def compute_null_depth_dB(
         jammer.elevation_deg,
         wavelength_m=lambda_jam_m,
     )
-
     
     if config.beamforming.algorithm in ("lcmv", "lcmvq"):
         gain_abs = abs(weights @ a_j)
@@ -497,7 +497,8 @@ def compute_jammer_metrics_v2(
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
     jnr_db:float,
-    num_jammers:int
+    num_jammers:int,
+    database: MeasuredSteeringDatabase | None = None
 ) -> pd.DataFrame:
 
     rows = []
@@ -513,6 +514,7 @@ def compute_jammer_metrics_v2(
             azimuth_scan_deg,
             elevation_scan_deg,
             wavelength_m=lambda_jam_m,
+            database=database
         )
 
         response_2d_dB = grid_2d["response_power_dB"]
