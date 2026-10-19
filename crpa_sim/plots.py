@@ -490,6 +490,91 @@ def plot_temporal_psd_spectrum(
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
+def plot_moving_jammer(
+    time_total: np.ndarray,
+    acc_att: np.ndarray,
+    az: np.ndarray,
+    el: np.ndarray,
+    T_update: float,
+) -> None:
+    """
+    Representa la evolución temporal de:
+      - Atenuación del jammer
+      - Azimut
+      - Elevación
+
+    Parámetros
+    ----------
+    time_total : np.ndarray
+        Vector temporal [s].
+
+    acc_att : np.ndarray
+        Atenuación instantánea [dB].
+
+    az : np.ndarray
+        Azimut del jammer [deg].
+
+    el : np.ndarray
+        Elevación del jammer [deg].
+
+    T_update : float
+        Periodo de actualización de pesos [s].
+    """
+
+    fig, axs = plt.subplots(3,1,figsize=(10, 8),sharex=True,)
+
+    time_ms = time_total * 1e3
+
+    # ======================
+    # Atenuación
+    # ======================
+    axs[0].plot(time_ms,acc_att,linewidth=2,color="tab:blue",)
+    axs[0].set_ylabel("Att [dB]")
+    axs[0].set_title("Atenuación del jammer")
+    axs[0].grid(True)
+
+    # ======================
+    # Azimut
+    # ======================
+    axs[1].plot(time_ms,az,linewidth=2,color="tab:orange",)
+    axs[1].set_ylabel("Az [deg]")
+    axs[1].set_title("Evolución del azimut")
+    axs[1].grid(True)
+
+    margin_az = max(0.01,0.1 * (np.max(az) - np.min(az)))
+
+    axs[1].set_ylim(np.min(az) - margin_az,np.max(az) + margin_az,)
+
+    # ======================
+    # Elevación
+    # ======================
+    axs[2].plot(time_ms,el,linewidth=2,color="tab:green",)
+    axs[2].set_ylabel("El [deg]")
+    axs[2].set_xlabel("Tiempo [ms]")
+    axs[2].set_title("Evolución de la elevación")
+    axs[2].grid(True)
+
+    margin_el = max(0.01,0.1 * (np.max(el) - np.min(el)))
+
+    axs[2].set_ylim(np.min(el) - margin_el,np.max(el) + margin_el,)
+
+    # ======================
+    # Instantes de actualización
+    # ======================
+    update_times_ms = np.arange(0,time_total[-1] + T_update,T_update,) * 1e3
+
+    for ax in axs:
+        for t_up in update_times_ms:
+            ax.axvline(
+                t_up,
+                color="red",
+                linestyle="--",
+                alpha=0.3,
+            )
+
+    plt.tight_layout()
+    plt.show()
+
 
 def plot_metrics_vs_jnr(
     metrics_df: pd.DataFrame,
@@ -594,5 +679,60 @@ def plot_metrics_vs_jnr(
         output_path,
         dpi=200,
     )
+
+    plt.close(fig)
+
+def plot_null_width_cuts_vs_jnr(
+    config: ProjectConfig,
+    null_width_total: np.ndarray,
+    output_path: Path,
+) -> None:
+
+    output_path.parent.mkdir(parents=True,exist_ok=True,)
+
+    thresholds_dB = [-10, -20, -30, -40]
+
+    n_thresholds = len(thresholds_dB)
+
+    n_cols = len(null_width_total[0])
+    n_rows = math.ceil(n_thresholds / n_cols)
+
+    fig, axs = plt.subplots( n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows), sharex=True,)
+    axs = np.atleast_1d(axs).flatten()
+
+    colors = ["royalblue","darkorange","crimson","forestgreen","purple","brown","black",]
+
+    for i_thr, threshold_dB in enumerate(thresholds_dB):
+
+        ax = axs[i_thr]
+
+        for i_jam, num_jammers in enumerate(config.jammer.num_jammers):
+
+            ax.plot(
+                config.jammer.jnr_dB,
+                null_width_total[i_jam, :, i_thr],
+                marker="o",
+                markersize=8,
+                linewidth=2,
+                color=colors[i_jam % len(colors)],
+                label=f"{num_jammers} jammer(s)",
+            )
+
+        ax.grid(True,which="major",linestyle="--",alpha=0.6,)
+
+        ax.minorticks_on()
+
+        ax.grid(True,which="minor",linestyle=":",alpha=0.3,)
+
+        ax.set_xlabel("JNR [dB]",fontweight="bold",)
+        ax.set_ylabel("Null Width [deg]",fontweight="bold",)
+        ax.set_title(f"Threshold = {threshold_dB} dB",fontweight="bold",)
+        ax.legend(title="Number of Jammers",loc="best",)
+
+    for ax in axs[n_thresholds:]:
+        ax.set_visible(False)
+
+    fig.tight_layout()
+    fig.savefig(output_path,dpi=200,)
 
     plt.close(fig)

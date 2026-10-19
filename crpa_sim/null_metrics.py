@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from .array_model import steering_vector
 from .config import JammerInstance, ProjectConfig
-from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_2d_response_grid
+from .patterns import compute_azimuth_response_cut, compute_elevation_response_cut, compute_radial_response_cut, compute_2d_response_grid
 # from .jammers import jammer_center_frequency_hz
 from .jammers import jammer_center_frequency_hz, jammer_wavelength_m
 from numba import njit
@@ -375,117 +375,62 @@ def measure_null_widths_from_cuts(
     element_positions_m: np.ndarray,
     weights: np.ndarray,
     jammer_list: Sequence[JammerInstance],
-    azimuth_scan_deg: np.ndarray,
-    elevation_scan_deg: np.ndarray,
+    n_cuts: int,
 ) -> pd.DataFrame:
 
     rows = []
+    cut_angles_deg = np.arange(0.0, 180.0, 180.0 / n_cuts,)
+
+    CUT_HALF_WIDTH_DEG = 40
+    N_POINTS = 201
+    step_deg = 2 * CUT_HALF_WIDTH_DEG / (N_POINTS - 1)
+    distance_scan_deg = np.linspace(- CUT_HALF_WIDTH_DEG, CUT_HALF_WIDTH_DEG, N_POINTS)
 
     for jammer in jammer_list:
 
-        lambda_jam_m = jammer_wavelength_m(
-            config,
-            jammer,
-        )
+        lambda_jam_m = jammer_wavelength_m(config,jammer )
 
-        az_cut = compute_azimuth_response_cut(
-            config,
-            element_positions_m,
-            weights,
-            azimuth_scan_deg,
-            fixed_elevation_deg=jammer.elevation_deg,
-            wavelength_m=lambda_jam_m,
-        )
+        for cut_angle_deg in cut_angles_deg:
 
-        el_cut = compute_elevation_response_cut(
-            config,
-            element_positions_m,
-            weights,
-            elevation_scan_deg,
-            fixed_azimuth_deg=jammer.azimuth_deg,
-            wavelength_m=lambda_jam_m,
-        )
-
-        az_axis = az_cut["azimuth_deg"].to_numpy(dtype=float)
-        el_axis = el_cut["elevation_deg"].to_numpy(dtype=float)
-
-        az_response = az_cut["response_dB_normalized"].to_numpy(dtype=float)
-        el_response = el_cut["response_dB_normalized"].to_numpy(dtype=float)
-
-        # =====================================================
-        # Azimut circular
-        # =====================================================
-
-        n_az = len(az_axis)
-
-        az_axis_ext = np.concatenate(
-            [
-                az_axis - 360.0,
-                az_axis,
-                az_axis + 360.0,
-            ]
-        )
-
-        az_response_ext = np.concatenate(
-            [
-                az_response,
-                az_response,
-                az_response,
-            ]
-        )
-
-        az_idx = np.argmin(np.abs(((az_axis - jammer.azimuth_deg + 180.0) % 360.0) - 180.0))
-
-        # índice en la copia central
-        az_idx_ext = az_idx + n_az
-
-        # Elevación sigue igual
-        el_idx = np.argmin(np.abs(el_axis - jammer.elevation_deg))
-
-        for threshold in config.scan.null_thresholds_dB:
-
-            width_az = np.nan
-
-            if az_response_ext[az_idx_ext] <= threshold:
-
-                left = az_idx_ext
-
-                while (left > 0 and az_response_ext[left - 1] <= threshold):
-                    left -= 1
-
-                right = az_idx_ext
-
-                while (right < len(az_response_ext) - 1 and az_response_ext[right + 1] <= threshold):
-                    right += 1
-
-                width_az = float(az_axis_ext[right] - az_axis_ext[left])
-
-            width_el = np.nan
-
-            if el_response[el_idx] <= threshold:
-
-                down = el_idx
-
-                while (down > 0 and el_response[down - 1] <= threshold):
-                    down -= 1
-
-                up = el_idx
-
-                while (up < len(el_response) - 1 and el_response[up + 1] <= threshold):
-                    up += 1
-
-                width_el = float(el_axis[up] - el_axis[down])
-
-            rows.append(
-                {
-                    "jammer_name": jammer.name,
-                    "jammer_azimuth_deg": jammer.azimuth_deg,
-                    "jammer_elevation_deg": jammer.elevation_deg,
-                    "attenuation_threshold_dB": threshold,
-                    "null_width_azimuth_deg": width_az,
-                    "null_width_elevation_deg": width_el,
-                }
+            cut = compute_radial_response_cut(
+                config,
+                element_positions_m,
+                weights,
+                center_az_deg=jammer.azimuth_deg,
+                center_el_deg=jammer.elevation_deg,
+                cut_angle_deg=cut_angle_deg,
+                distance_scan_deg = distance_scan_deg,
+                wavelength_m=lambda_jam_m,
             )
+
+            response = 20.0 * np.log10(cut["response_abs"].to_numpy(dtype=float)+10**(-12))
+            center_idx = len(response) // 2
+
+            for threshold in config.scan.null_thresholds_dB:
+
+                width_deg = np.nan
+
+                if response[center_idx] <= threshold:
+
+                    left = center_idx
+                    while (left > 0 and response[left - 1] <= threshold):
+                        left -= 1
+                    right = center_idx
+                    while (right < len(response) - 1 and response[right + 1] <= threshold):
+                        right += 1
+
+                    width_deg = (right - left) * step_deg
+
+                rows.append(
+                    {
+                        "jammer_name": jammer.name,
+                        "jammer_azimuth_deg": jammer.azimuth_deg,
+                        "jammer_elevation_deg": jammer.elevation_deg,
+                        "cut_angle_deg": cut_angle_deg,
+                        "attenuation_threshold_dB": threshold,
+                        "null_width_deg": width_deg,
+                    }
+                )
 
     return pd.DataFrame(rows)
 
@@ -549,12 +494,12 @@ def compute_jammer_metrics_v2(
         # Métrica 3: Porcentaje de espacio angular
         # ==================================================
 
-        percent_below_3dB = (100.0 * np.mean(response_2d_dB <= -3.0))
+        """percent_below_3dB = (100.0 * np.mean(response_2d_dB <= -3.0))
         percent_below_6dB = (100.0 * np.mean(response_2d_dB <= -6.0))
         percent_below_10dB = (100.0 * np.mean(response_2d_dB <= -10.0))
         percent_below_20dB = (100.0 * np.mean(response_2d_dB <= -20.0))
         percent_below_30dB = (100.0 * np.mean(response_2d_dB <= -30.0))
-        percent_below_40dB = (100.0 * np.mean(response_2d_dB <= -40.0))
+        percent_below_40dB = (100.0 * np.mean(response_2d_dB <= -40.0))"""
 
         rows.append(
             {
@@ -567,12 +512,6 @@ def compute_jammer_metrics_v2(
                 "attenuation_cone_2deg_dB": attenuation_cone_2deg_dB,
                 "attenuation_cone_5deg_dB": attenuation_cone_5deg_dB,
                 "attenuation_cone_10deg_dB": attenuation_cone_10deg_dB,
-                "percent_space_below_3dB": percent_below_3dB,
-                "percent_space_below_6dB": percent_below_6dB,
-                "percent_space_below_10dB": percent_below_10dB,
-                "percent_space_below_20dB": percent_below_20dB,
-                "percent_space_below_30dB": percent_below_30dB,
-                "percent_space_below_40dB": percent_below_40dB,
             }
         )
 

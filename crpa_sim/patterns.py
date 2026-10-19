@@ -136,11 +136,36 @@ def compute_elevation_response_cut(
     elevation_scan_deg: np.ndarray,
     fixed_azimuth_deg: float,
     wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
 ) -> pd.DataFrame:
     """Calcula un corte de patron variando elevacion con azimut fijo."""
     azimuths = np.full_like(elevation_scan_deg, fixed_azimuth_deg, dtype=float)
-    return evaluate_response_for_angles(config, element_positions_m, weights, azimuths, elevation_scan_deg, wavelength_m=wavelength_m,)
+    return evaluate_response_for_angles(config, element_positions_m, weights, azimuths, elevation_scan_deg, wavelength_m=wavelength_m, database=database)
 
+def compute_radial_response_cut(
+    config: ProjectConfig,
+    element_positions_m: np.ndarray,
+    weights: np.ndarray,
+    center_az_deg: float,
+    center_el_deg: float,
+    cut_angle_deg: float,
+    distance_scan_deg: float | None = None,
+    wavelength_m: float | None = None,
+    database: MeasuredSteeringDatabase | None = None
+)-> pd.DataFrame:
+
+    if distance_scan_deg is None:
+        distance_scan_deg = np.linspace(-10.0, 10.0, 201)
+
+    theta_rad = np.deg2rad(cut_angle_deg)
+
+    azimuths = center_az_deg + distance_scan_deg*np.cos(theta_rad)
+    elevations = center_el_deg + distance_scan_deg*np.sin(theta_rad)
+
+    elevations = np.clip(elevations, 0.0, 90.0)
+    azimuths = azimuths % 360.0
+
+    return evaluate_response_for_angles(config, element_positions_m,weights,azimuths,elevations,wavelength_m=wavelength_m,database=database,)
 
 def compute_2d_response_grid(
     config: ProjectConfig,
