@@ -376,6 +376,7 @@ def measure_null_widths_from_cuts(
     weights: np.ndarray,
     jammer_list: Sequence[JammerInstance],
     n_cuts: int,
+    database: MeasuredSteeringDatabase | None = None
 ) -> pd.DataFrame:
 
     rows = []
@@ -401,6 +402,7 @@ def measure_null_widths_from_cuts(
                 cut_angle_deg=cut_angle_deg,
                 distance_scan_deg = distance_scan_deg,
                 wavelength_m=lambda_jam_m,
+                database=database
             )
 
             response = 20.0 * np.log10(cut["response_abs"].to_numpy(dtype=float)+10**(-12))
@@ -441,46 +443,59 @@ def compute_jammer_metrics_v2(
     jammer_list: Sequence[JammerInstance],
     azimuth_scan_deg: np.ndarray,
     elevation_scan_deg: np.ndarray,
-    jnr_db:float,
-    num_jammers:int,
-    database: MeasuredSteeringDatabase | None = None
+    jnr_db: float,
+    num_jammers: int,
+    database: MeasuredSteeringDatabase | None = None,
 ) -> pd.DataFrame:
 
     rows = []
+
+    last_lambda = None
+    last_grid_2d = None
 
     for jammer in jammer_list:
 
         lambda_jam_m = jammer_wavelength_m(config,jammer,)
 
-        grid_2d = compute_2d_response_grid(
-            config,
-            element_positions_m,
-            weights,
-            azimuth_scan_deg,
-            elevation_scan_deg,
-            wavelength_m=lambda_jam_m,
-            database=database
-        )
+        if (last_lambda is None or not np.isclose(lambda_jam_m,last_lambda,)):
 
+            last_grid_2d = compute_2d_response_grid(
+                config,
+                element_positions_m,
+                weights,
+                azimuth_scan_deg,
+                elevation_scan_deg,
+                wavelength_m=lambda_jam_m,
+                database=database,
+            )
+
+        last_lambda = lambda_jam_m
+        grid_2d = last_grid_2d
         response_2d_dB = grid_2d["response_power_dB"]
-        az_grid, el_grid = np.meshgrid(azimuth_scan_deg,elevation_scan_deg,indexing="xy",)
+
+        # Usar SIEMPRE la rejilla real devuelta por compute_2d_response_grid
+        az_grid = grid_2d["azimuth_deg"]
+        el_grid = grid_2d["elevation_deg"]
 
         # ==================================================
         # Métrica 1: Atenuación exacta en la DOA
         # ==================================================
 
-        az_idx = np.argmin(np.abs( ( (azimuth_scan_deg - jammer.azimuth_deg+ 180.0) % 360.0) - 180.0))
-        el_idx = np.argmin(np.abs(elevation_scan_deg - jammer.elevation_deg))
-
+        delta_az_exact = ( (az_grid - jammer.azimuth_deg + 180.0)% 360.0) - 180.0
+        delta_el_exact = ( el_grid- jammer.elevation_deg)
+        distance_exact_deg = np.sqrt(delta_az_exact**2 + delta_el_exact**2)
+        el_idx, az_idx = np.unravel_index( np.argmin(distance_exact_deg),distance_exact_deg.shape,)
+        
         attenuation_exact_dB = response_2d_dB[el_idx,az_idx,]
 
         # ==================================================
         # Métrica 2: Atenuación media en conos
         # ==================================================
 
-        delta_az = ((az_grid- jammer.azimuth_deg + 180.0) % 360.0) - 180.0
-        delta_el = (el_grid - jammer.elevation_deg)
-        distance_deg = np.sqrt( delta_az**2  + delta_el**2)
+        delta_az = ((az_grid- jammer.azimuth_deg+ 180.0)% 360.0) - 180.0
+        delta_el = (el_grid- jammer.elevation_deg)
+
+        distance_deg = np.sqrt( delta_az**2 + delta_el**2)
 
         mask_2deg = distance_deg <= 2.0
         mask_5deg = distance_deg <= 5.0
@@ -489,17 +504,6 @@ def compute_jammer_metrics_v2(
         attenuation_cone_2deg_dB = np.mean(response_2d_dB[mask_2deg])
         attenuation_cone_5deg_dB = np.mean(response_2d_dB[mask_5deg])
         attenuation_cone_10deg_dB = np.mean(response_2d_dB[mask_10deg])
-
-        # ==================================================
-        # Métrica 3: Porcentaje de espacio angular
-        # ==================================================
-
-        """percent_below_3dB = (100.0 * np.mean(response_2d_dB <= -3.0))
-        percent_below_6dB = (100.0 * np.mean(response_2d_dB <= -6.0))
-        percent_below_10dB = (100.0 * np.mean(response_2d_dB <= -10.0))
-        percent_below_20dB = (100.0 * np.mean(response_2d_dB <= -20.0))
-        percent_below_30dB = (100.0 * np.mean(response_2d_dB <= -30.0))
-        percent_below_40dB = (100.0 * np.mean(response_2d_dB <= -40.0))"""
 
         rows.append(
             {

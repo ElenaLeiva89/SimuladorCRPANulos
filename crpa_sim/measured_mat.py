@@ -398,59 +398,18 @@ def _interpolation_indices(
 def to_complex(amplitude_dB, phase_deg):
     return (10.0 ** (amplitude_dB / 20.0)* np.exp(1j * np.deg2rad(phase_deg)))
 
-def measured_steering_vector(
-    database: MeasuredSteeringDatabase,
-    azimuth_deg: float,
-    elevation_deg: float,
-    frequency_hz: float,
-) -> np.ndarray:
-    """Reconstruye un steering complejo relativo de siete elementos.
 
-    La antena central se fija como referencia:
-        amplitud = 1
-        fase = 0 grados
-
-    Para las antenas 2..7 se emplean las primeras seis diferencias
-    respecto a la antena central.
+def parabola_offset(e_minus, e0, e_plus, h):
+    """
+    Devuelve el desplazamiento respecto al punto central.
     """
 
-    if frequency_hz <= 0.0:
-        raise ValueError("frequency_hz debe ser mayor que cero.")
+    denom = (e_minus - 2.0 * e0 + e_plus)
 
-    azimuth_deg = azimuth_deg % 360.0
+    if abs(denom) < 1e-12:
+        return 0.0
 
-    # Índices y pesos de interpolación
-    az_low, az_high, az_alpha = _interpolation_indices(database.azimuths_deg,azimuth_deg,)
-    el_low, el_high, el_alpha = _interpolation_indices(database.elevations_deg,elevation_deg,)
-    freq_low, freq_high, freq_alpha = _interpolation_indices(database.frequencies_hz,frequency_hz,)
-
-    # 8 vértices del cubo convertidos a campo complejo
-    e000 = to_complex(database.amplitude_dB[az_low,  el_low,  :, freq_low],database.phase_deg[az_low,  el_low,  :, freq_low],)
-    e100 = to_complex(database.amplitude_dB[az_high, el_low,  :, freq_low],database.phase_deg[az_high, el_low,  :, freq_low],)
-    e010 = to_complex(database.amplitude_dB[az_low,  el_high, :, freq_low],database.phase_deg[az_low,  el_high, :, freq_low],)
-    e110 = to_complex(database.amplitude_dB[az_high, el_high, :, freq_low],database.phase_deg[az_high, el_high, :, freq_low],)
-    e001 = to_complex(database.amplitude_dB[az_low,  el_low,  :, freq_high],database.phase_deg[az_low,  el_low,  :, freq_high],)
-    e101 = to_complex(database.amplitude_dB[az_high, el_low,  :, freq_high],database.phase_deg[az_high, el_low,  :, freq_high],)
-    e011 = to_complex(database.amplitude_dB[az_low,  el_high, :, freq_high],database.phase_deg[az_low,  el_high, :, freq_high],)
-    e111 = to_complex(database.amplitude_dB[az_high, el_high, :, freq_high],database.phase_deg[az_high, el_high, :, freq_high],)
-
-    # Interpolación trilineal del campo complejo
-    e00 = e000 + az_alpha * (e100 - e000)
-    e10 = e010 + az_alpha * (e110 - e010)
-    e01 = e001 + az_alpha * (e101 - e001)
-    e11 = e011 + az_alpha * (e111 - e011)
-    e0 = e00 + el_alpha * (e10 - e00)
-    e1 = e01 + el_alpha * (e11 - e01)
-
-    field_interp = e0 + freq_alpha * (e1 - e0)
-
-    steering = np.empty(7, dtype=complex)
-    # Elemento central utilizado como referencia relativa.
-    steering[0] = 1.0 + 0.0j
-    # Elementos exteriores 2..7 respecto al central.
-    steering[1:] = field_interp
-
-    return steering
+    return (0.5 * h* (e_minus - e_plus)/ denom)
 
 def polarization_from_mat_filename(path_text: str) -> str:
     """Obtiene la polarización C, V o H del nombre de un fichero MAT.
@@ -480,50 +439,69 @@ def polarization_from_mat_filename(path_text: str) -> str:
 
     return polarization
 
-def measured_steering_vector_nearest_angle(
+def measured_steering_matrix_complex_solo_freq(
     database: MeasuredSteeringDatabase,
-    azimuth_deg: float,
-    elevation_deg: float,
+    azimuth_deg_array: np.ndarray,
+    elevation_deg_array: np.ndarray,
     frequency_hz: float,
 ) -> np.ndarray:
-    """
-    Steering vector usando:
-
-    - Vecino más cercano en azimut.
-    - Vecino más cercano en elevación.
-    - Interpolación lineal sólo en frecuencia.
-    """
 
     if frequency_hz <= 0.0:
         raise ValueError(
             "frequency_hz debe ser mayor que cero."
         )
 
-    azimuth_deg = azimuth_deg % 360.0
+    azimuth_deg_array = np.asarray(
+        azimuth_deg_array,
+        dtype=float,
+    ) % 360.0
 
-    # ==================================================
-    # Azimut: índice por round
-    # ==================================================
+    elevation_deg_array = np.asarray(
+        elevation_deg_array,
+        dtype=float,
+    )
 
-    az_step = (database.azimuths_deg[1] - database.azimuths_deg[0])
+    az_step = (
+        database.azimuths_deg[1]
+        - database.azimuths_deg[0]
+    )
+
+    el_step = (
+        database.elevations_deg[1]
+        - database.elevations_deg[0]
+    )
 
     az_half_step = az_step / 2.0
-    az_idx = int(((azimuth_deg + az_half_step) / az_step)) % len(database.azimuths_deg)
-    
-    # ==================================================
-    # Elevación: índice por round
-    # ==================================================
-
-    el_step = (database.elevations_deg[1]- database.elevations_deg[0])
-
     el_half_step = el_step / 2.0
-    el_idx = int((elevation_deg- database.elevations_deg[0]+ el_half_step)/ el_step)
 
-    # ==================================================
-    # Frecuencia: interpolación lineal
-    # ==================================================
+    az_idx = (
+        (
+            azimuth_deg_array
+            + az_half_step
+        ) / az_step
+    ).astype(np.int64) % len(
+        database.azimuths_deg
+    )
 
-    freq_low, freq_high, freq_alpha = (_interpolation_indices(database.frequencies_hz,frequency_hz,))
+    el_idx = np.clip(
+        (
+            (
+                elevation_deg_array
+                - database.elevations_deg[0]
+                + el_half_step
+            )
+            / el_step
+        ).astype(np.int64),
+        0,
+        len(database.elevations_deg) - 1,
+    )
+
+    freq_low, freq_high, freq_alpha = (
+        _interpolation_indices(
+            database.frequencies_hz,
+            frequency_hz,
+        )
+    )
 
     e0 = database.field_complex[
         az_idx,
@@ -539,15 +517,214 @@ def measured_steering_vector_nearest_angle(
         freq_high,
     ]
 
-    # ==================================================
-    # Sólo frecuencia
-    # ==================================================
+    field_interp = (
+        e0
+        + freq_alpha * (e1 - e0)
+    )
 
-    field_interp = (e0+ freq_alpha * (e1 - e0))
+    steering = np.empty(
+        (
+            len(azimuth_deg_array),
+            7,
+        ),
+        dtype=np.complex128,
+    )
 
-    steering = np.empty(7,dtype=complex,)
+    steering[:, 0] = 1.0 + 0.0j
+    steering[:, 1:] = field_interp
+
+    return steering
+
+def measured_steering_vector_complex(
+    database: MeasuredSteeringDatabase,
+    azimuth_deg: float,
+    elevation_deg: float,
+    frequency_hz: float,
+) -> np.ndarray:
+
+    if frequency_hz <= 0.0:
+        raise ValueError("frequency_hz debe ser mayor que cero.")
+
+    azimuth_deg = azimuth_deg % 360.0
+
+    az_low, az_high, az_alpha = _interpolation_indices( database.azimuths_deg, azimuth_deg,)
+    el_low, el_high, el_alpha = _interpolation_indices( database.elevations_deg, elevation_deg, )
+    freq_low, freq_high, freq_alpha = _interpolation_indices(database.frequencies_hz,frequency_hz,)
+
+    # 8 vértices del cubo
+
+    e000 = database.field_complex[az_low,el_low, :,freq_low,]
+    e100 = database.field_complex[az_high,el_low,:,freq_low,]
+    e010 = database.field_complex[az_low,el_high,:,freq_low,]
+    e110 = database.field_complex[az_high,el_high,:,freq_low,]
+    e001 = database.field_complex[az_low,el_low,:,freq_high,]
+    e101 = database.field_complex[az_high,el_low,:,freq_high,]
+    e011 = database.field_complex[az_low,el_high,:,freq_high,]
+    e111 = database.field_complex[az_high,el_high,:,freq_high,]
+
+    # Interpolación trilineal COMPLEJA
+
+    e00 = e000 + az_alpha * (e100 - e000)
+    e10 = e010 + az_alpha * (e110 - e010)
+    e01 = e001 + az_alpha * (e101 - e001)
+    e11 = e011 + az_alpha * (e111 - e011)
+    e0 = e00 + el_alpha * (e10 - e00)
+    e1 = e01 + el_alpha * (e11 - e01)
+
+    field_interp = e0 + freq_alpha * (e1 - e0)
+    steering = np.empty(7,dtype=np.complex128,)
 
     steering[0] = 1.0 + 0.0j
     steering[1:] = field_interp
+
+    return steering
+
+def measured_steering_matrix_complex(
+    database: MeasuredSteeringDatabase,
+    azimuth_deg_array: np.ndarray,
+    elevation_deg_array: np.ndarray,
+    frequency_hz: float,
+) -> np.ndarray:
+    """
+    Devuelve una matriz de steering vectors.
+
+    Returns
+    -------
+    steering : ndarray
+        Shape (N_points, 7)
+    """
+
+    if frequency_hz <= 0.0:
+        raise ValueError("frequency_hz debe ser mayor que cero.")
+
+    azimuth_deg_array = (np.asarray(azimuth_deg_array, dtype=float) % 360.0)
+    elevation_deg_array = np.asarray(elevation_deg_array,dtype=float,)
+
+    if len(azimuth_deg_array) != len(elevation_deg_array):
+        raise ValueError(
+            "azimuth_deg_array y elevation_deg_array "
+            "deben tener la misma longitud."
+        )
+
+    # ==================================================
+    # Índices interpolación Angular
+    # ==================================================
+
+    az_low = np.searchsorted(database.azimuths_deg,azimuth_deg_array,side="right",) - 1
+    az_low = np.clip( az_low, 0,len(database.azimuths_deg) - 1,)
+    az_high = (az_low + 1) % len(database.azimuths_deg)
+
+    az_low_val = database.azimuths_deg[az_low]
+    az_high_val = database.azimuths_deg[az_high]
+
+    az_delta = (az_high_val - az_low_val) % 360.0
+    az_delta[az_delta == 0.0] = 360.0
+
+    az_alpha = ((azimuth_deg_array - az_low_val) % 360.0) / az_delta
+
+    # --------------------------
+
+    el_low = np.searchsorted(database.elevations_deg, elevation_deg_array, side="right",) - 1
+    el_low = np.clip(el_low,0,len(database.elevations_deg) - 2,)
+    el_high = el_low + 1
+
+    el_low_val = database.elevations_deg[el_low]
+    el_high_val = database.elevations_deg[el_high]
+    el_alpha = (elevation_deg_array - el_low_val) / (el_high_val - el_low_val)
+
+    # ==================================================
+    # Frecuencia
+    # ==================================================
+
+    freq_low, freq_high, freq_alpha = (_interpolation_indices(database.frequencies_hz,frequency_hz,))
+
+    # ==================================================
+    # 8 vértices
+    # ==================================================
+
+    e000 = database.field_complex[
+        az_low,
+        el_low,
+        :,
+        freq_low,
+    ]
+
+    e100 = database.field_complex[
+        az_high,
+        el_low,
+        :,
+        freq_low,
+    ]
+
+    e010 = database.field_complex[
+        az_low,
+        el_high,
+        :,
+        freq_low,
+    ]
+
+    e110 = database.field_complex[
+        az_high,
+        el_high,
+        :,
+        freq_low,
+    ]
+
+    e001 = database.field_complex[
+        az_low,
+        el_low,
+        :,
+        freq_high,
+    ]
+
+    e101 = database.field_complex[
+        az_high,
+        el_low,
+        :,
+        freq_high,
+    ]
+
+    e011 = database.field_complex[
+        az_low,
+        el_high,
+        :,
+        freq_high,
+    ]
+
+    e111 = database.field_complex[
+        az_high,
+        el_high,
+        :,
+        freq_high,
+    ]
+
+    # ==================================================
+    # Broadcasting
+    # ==================================================
+
+    az_alpha = az_alpha[:, None]
+    el_alpha = el_alpha[:, None]
+
+    # ==================================================
+    # Interpolación trilineal compleja
+    # ==================================================
+
+    e00 = e000 + az_alpha * (e100 - e000)
+    e10 = e010 + az_alpha * (e110 - e010)
+    e01 = e001 + az_alpha * (e101 - e001)
+    e11 = e011 + az_alpha * (e111 - e011)
+    e0 = e00 + el_alpha * (e10 - e00)
+    e1 = e01 + el_alpha * (e11 - e01)
+
+    field_interp = e0 + freq_alpha * (e1 - e0)
+
+    # ==================================================
+    # Steering matrix
+    # ==================================================
+
+    steering = np.empty((len(azimuth_deg_array),7,), dtype=np.complex128,)
+
+    steering[:, 0] = 1.0 + 0.0j
+    steering[:, 1:] = field_interp
 
     return steering

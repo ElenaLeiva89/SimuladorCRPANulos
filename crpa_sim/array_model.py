@@ -31,11 +31,9 @@ import numpy as np
 from .config import ArrayConfig, ProjectConfig
 from .measured_mat import (
     load_measured_steering_database,
-    measured_steering_vector,
-    measured_steering_vector_nearest_angle,
+    measured_steering_vector_complex,
     MeasuredSteeringDatabase
 )
-
 
 @dataclass(frozen=True)
 class MeasuredSteeringTable:
@@ -80,18 +78,25 @@ def direction_unit_vector(azimuth_deg: float, elevation_deg: float) -> np.ndarra
     el = np.deg2rad(elevation_deg)
     return np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
 
-
 def steering_vector_ideal(
     element_positions_m: np.ndarray,
     azimuth_deg: float,
     elevation_deg: float,
     wavelength_m: float,
+    angular_resolution_deg: float | None = None,
 ) -> np.ndarray:
-    """Calcula el steering vector ideal para elementos isotropicos."""
+    """Calcula el steering vector ideal para elementos isotrópicos."""
+
+    if angular_resolution_deg is not None:
+
+        azimuth_deg = (np.round(azimuth_deg / angular_resolution_deg) * angular_resolution_deg) % 360.0
+        elevation_deg = (np.round(elevation_deg / angular_resolution_deg) * angular_resolution_deg)
+
     k_rad_m = 2.0 * np.pi / wavelength_m
-    u = direction_unit_vector(azimuth_deg, elevation_deg)
+
+    u = direction_unit_vector( azimuth_deg, elevation_deg,)
+
     phase_rad = k_rad_m * (element_positions_m @ u)
-    
     return np.exp(1j * phase_rad)
 
 
@@ -325,38 +330,14 @@ def steering_vector_measured(
 ) -> np.ndarray:
     """Devuelve steering medido para dirección y frecuencia concretas."""
 
-    # Full interpolacion
-    """return measured_steering_vector(
-        database=database,
-        azimuth_deg=azimuth_deg,
-        elevation_deg=elevation_deg,
-        frequency_hz=frequency_hz,
-    )"""
-
     # Interpolacion solo frecuencia
-    return measured_steering_vector_nearest_angle(
+    return measured_steering_vector_complex(
         database=database,
         azimuth_deg=azimuth_deg,
         elevation_deg=elevation_deg,
         frequency_hz=frequency_hz,
     )
 
-# def steering_vector(
-#     config: ProjectConfig,
-#     element_positions_m: np.ndarray,
-#     azimuth_deg: float,
-#     elevation_deg: float,
-#     wavelength_m: float | None = None,
-# ) -> np.ndarray:
-#     """Devuelve el steering vector segun el modelo configurado."""
-#     if wavelength_m is None:
-#         wavelength_m = config.signal.wavelength_m
-
-#     if config.array.steering_model == "ideal":
-#         return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m,)
-#     if config.array.steering_model == "measured":
-#         return steering_vector_measured(config, azimuth_deg, elevation_deg)
-#     raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
 
 def steering_vector(
     config: ProjectConfig,
@@ -375,11 +356,10 @@ def steering_vector(
         raise ValueError("wavelength_m debe ser mayor que cero.")
 
     if config.array.steering_model == "ideal":
-        return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m,)
+        return steering_vector_ideal(element_positions_m, azimuth_deg, elevation_deg, wavelength_m)
 
     if config.array.steering_model == "measured":
         frequency_hz = (config.signal.speed_of_light_m_s / wavelength_m)
-
         return steering_vector_measured(config=config, azimuth_deg=azimuth_deg, elevation_deg=elevation_deg, frequency_hz=frequency_hz, database=database)
 
     raise ValueError(f"Modelo steering no soportado: "f"{config.array.steering_model}")

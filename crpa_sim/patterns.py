@@ -14,7 +14,9 @@ import numpy as np
 import pandas as pd
 from .array_model import steering_vector
 from .config import ProjectConfig
-from .measured_mat import MeasuredSteeringDatabase, _interpolation_indices
+from .measured_mat import MeasuredSteeringDatabase, _interpolation_indices, measured_steering_matrix_complex, measured_steering_matrix_complex_solo_freq
+
+_STEERING_GRID_CACHE: dict = {}
 
 
 def conventional_weights(config: ProjectConfig, element_positions_m: np.ndarray) -> np.ndarray:
@@ -35,35 +37,57 @@ def _evaluate_response_complex_for_angles(
     azimuth_deg_array: np.ndarray,
     elevation_deg_array: np.ndarray,
     wavelength_m: float | None = None,
-    database: MeasuredSteeringDatabase | None = None
+    database: MeasuredSteeringDatabase | None = None,
 ) -> np.ndarray:
-    """Evalua B=w^H a(az, el) devolviendo valores complejos.
+    """Evalua B=w^H a(az, el) devolviendo valores complejos."""
 
-    Para ideal se mantiene el calculo analitico existente. Para measured se
-    obtiene de una vez la matriz de steering medida para todos los pares az/el.
-    """
     if wavelength_m is None:
         wavelength_m = config.signal.wavelength_m
 
     azimuth_deg_array = np.asarray(azimuth_deg_array, dtype=float)
     elevation_deg_array = np.asarray(elevation_deg_array, dtype=float)
+
     if len(azimuth_deg_array) != len(elevation_deg_array):
-        raise ValueError("azimuth_deg_array y elevation_deg_array deben tener la misma longitud.")
+        raise ValueError(
+            "azimuth_deg_array y elevation_deg_array deben tener la misma longitud."
+        )
 
-    # if config.array.steering_model == "measured":
-    #     steering = measured_steering_matrix_for_angles(config, azimuth_deg_array, elevation_deg_array)
-    #     return steering @ np.conjugate(weights)
+    if config.array.steering_model == "ideal":
 
-    values = []
-    for az, el in zip(azimuth_deg_array, elevation_deg_array):
-        # a = steering_vector(config, element_positions_m, float(az), float(el))
-        a = steering_vector(config, element_positions_m, float(az), float(el), wavelength_m=wavelength_m, database=database)
-        if config.beamforming.algorithm in ("lcmv", "lcmvq"):
-            values.append(weights @ a)
-        else:
-            values.append(np.vdot(weights, a))
-    return np.asarray(values)
+        az_rad = np.deg2rad(azimuth_deg_array)
+        el_rad = np.deg2rad(elevation_deg_array)
 
+        u = np.column_stack( [
+                np.cos(el_rad) * np.cos(az_rad),
+                np.cos(el_rad) * np.sin(az_rad),
+                np.sin(el_rad),
+            ] )
+
+        k_rad_m = 2.0 * np.pi / wavelength_m
+        phase = k_rad_m * (u @ element_positions_m.T)
+        steering = np.exp(1j * phase)
+
+    elif config.array.steering_model == "measured":
+
+        frequency_hz = (
+            config.signal.speed_of_light_m_s
+            / wavelength_m
+        )
+
+        steering = measured_steering_matrix_complex(
+            database=database,
+            azimuth_deg_array=azimuth_deg_array,
+            elevation_deg_array=elevation_deg_array,
+            frequency_hz=frequency_hz,
+        )
+
+    else:
+        raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
+
+    if config.beamforming.algorithm in ("lcmv", "lcmvq"):
+        return steering @ weights
+    else:
+        return steering @ np.conjugate(weights)
 
 def evaluate_response_for_angles(
     config: ProjectConfig,
@@ -176,8 +200,15 @@ def compute_2d_response_grid(
     wavelength_m: float | None = None,
     database: MeasuredSteeringDatabase | None = None
 ) -> dict[str, np.ndarray]:
-    """Evalua el patron en una malla 2D azimut/elevacion."""
-    az_grid, el_grid = np.meshgrid(azimuth_scan_deg, elevation_scan_deg, indexing="xy")
+
+    global _STEERING_GRID_CACHE
+
+    az_grid, el_grid = np.meshgrid(
+        azimuth_scan_deg,
+        elevation_scan_deg,
+        indexing="xy",
+    )
+
     az_flat = az_grid.ravel()
     el_flat = el_grid.ravel()
 
@@ -188,65 +219,80 @@ def compute_2d_response_grid(
         raise ValueError("wavelength_m debe ser mayor que cero.")
 
     if config.array.steering_model == "ideal":
-        # Rama ideal: se conserva el calculo vectorizado original.
+
         az_rad = np.deg2rad(az_flat)
         el_rad = np.deg2rad(el_flat)
+
         u = np.column_stack([
             np.cos(el_rad) * np.cos(az_rad),
             np.cos(el_rad) * np.sin(az_rad),
             np.sin(el_rad),
         ])
-        # k_rad_m = 2.0 * np.pi / config.signal.wavelength_m
+
         k_rad_m = 2.0 * np.pi / wavelength_m
         phase = k_rad_m * (u @ element_positions_m.T)
         steering = np.exp(1j * phase)
+
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
             response_complex = steering @ weights
         else:
             response_complex = steering @ np.conjugate(weights)
-    
+
     elif config.array.steering_model == "measured":
 
-        freq_low, freq_high, freq_alpha = (_interpolation_indices(database.frequencies_hz,config.signal.speed_of_light_m_s / wavelength_m,))
+        frequency_hz = ( config.signal.speed_of_light_m_s/ wavelength_m)
 
-        steering_rows = []
+        interp = "total"
 
-        az_step = (database.azimuths_deg[1] - database.azimuths_deg[0])
-        el_step = (database.elevations_deg[1]- database.elevations_deg[0])
+        if interp == "solo_freq":
 
-        az_half_step = az_step / 2.0
-        el_half_step = el_step / 2.0
+            steering = (
+                measured_steering_matrix_complex_solo_freq(
+                    database=database,
+                    azimuth_deg_array=az_flat,
+                    elevation_deg_array=el_flat,
+                    frequency_hz=frequency_hz,
+                )
+            )
 
-        for az, el in zip(az_flat, el_flat):
+        else:
 
-            az_idx = int(((az + az_half_step) / az_step)) % len(database.azimuths_deg)
-            el_idx = int((el- database.elevations_deg[0]+ el_half_step)/ el_step)
+            azimuth_scan_deg = np.arange(0.0,360.0,0.5,)
+            elevation_scan_deg = np.arange(0.0,90.0,0.5,)
+            az_grid, el_grid = np.meshgrid(azimuth_scan_deg,elevation_scan_deg,indexing="xy",)
 
-            e0 = database.field_complex[az_idx,el_idx,:,freq_low,]
-            e1 = database.field_complex[az_idx,el_idx,:,freq_high,]
+            az_flat = az_grid.ravel()
+            el_flat = el_grid.ravel()
 
-            field_interp = e0 + freq_alpha * (e1 - e0)
+            cache_key = (round(frequency_hz, 3),az_grid.shape,)
 
-            steering = np.empty(7, dtype=np.complex128)
-            steering[0] = 1.0
-            steering[1:] = field_interp
+            if cache_key not in _STEERING_GRID_CACHE:
 
-            steering_rows.append(steering)
-        
-        steering = np.vstack(steering_rows)
+                _STEERING_GRID_CACHE[cache_key] = (
+                    measured_steering_matrix_complex(
+                        database=database,
+                        azimuth_deg_array=az_flat,
+                        elevation_deg_array=el_flat,
+                        frequency_hz=frequency_hz,
+                    )
+                )
+
+            steering = _STEERING_GRID_CACHE[cache_key]
 
         if config.beamforming.algorithm in ("lcmv", "lcmvq"):
             response_complex = steering @ weights
         else:
             response_complex = steering @ np.conjugate(weights)
-            
+
     else:
-        raise ValueError(f"Modelo steering no soportado: {config.array.steering_model}")
+        raise ValueError(
+            f"Modelo steering no soportado: "
+            f"{config.array.steering_model}"
+        )
 
-    response_abs = np.abs(response_complex).reshape(az_grid.shape)
-    response_power = response_abs**2
-
-    response_power_dB = 10.0 * np.log10(np.maximum(response_power,1e-20,))
+    response_power = (np.abs(response_complex) ** 2).reshape(az_grid.shape)
+    response_abs = np.sqrt(response_power)
+    response_power_dB = 10.0 * np.log10(np.maximum(response_power, 1e-20))
 
     return {
         "azimuth_deg": az_grid,
@@ -255,7 +301,6 @@ def compute_2d_response_grid(
         "response_power": response_power,
         "response_power_dB": response_power_dB,
     }
-
 
 def make_scan_vectors(config: ProjectConfig) -> tuple[np.ndarray, np.ndarray]:
     """Crea los vectores de barrido angular a partir de la configuracion."""

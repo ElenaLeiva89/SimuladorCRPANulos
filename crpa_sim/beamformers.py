@@ -12,6 +12,10 @@ from .config import JammerInstance, ProjectConfig
 from .covariance import compute_sample_covariance, invert_covariance
 # from .jammers import jammer_center_frequency_hz
 from .jammers import jammer_wavelength_m
+from .measured_mat import (
+    MeasuredSteeringDatabase
+)
+
 
 
 def compute_power_inversion_weights(config: ProjectConfig, snapshot_matrix: np.ndarray) -> np.ndarray:
@@ -49,6 +53,7 @@ def compute_lcmv_weights(
     snapshot_matrix: np.ndarray,
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
+    database: MeasuredSteeringDatabase | None = None
 ) -> np.ndarray:
     """Calcula pesos LCMV con ganancia unitaria deseada y nulos en jammers.
 
@@ -71,6 +76,7 @@ def compute_lcmv_weights(
             element_positions_m,
             config.beamforming.desired_azimuth_deg,
             config.beamforming.desired_elevation_deg,
+            database=database
         )
     ]
     desired_response = [1.0 + 0.0j]
@@ -87,6 +93,7 @@ def compute_lcmv_weights(
                 jammer.azimuth_deg,
                 jammer.elevation_deg,
                 wavelength_m=lambda_jam_m,
+                database=database
             )
         )
 
@@ -106,6 +113,7 @@ def compute_lcmvq_weights(
     config: ProjectConfig,
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
+    database: MeasuredSteeringDatabase | None = None
 ) -> np.ndarray:
     """Calcula pesos LCMVQ: restricciones geométricas sin covarianza."""
 
@@ -121,6 +129,7 @@ def compute_lcmvq_weights(
         element_positions_m,
         config.beamforming.desired_azimuth_deg,
         config.beamforming.desired_elevation_deg,
+        database=database
     )
     steering_vectors.append(a_des)
 
@@ -143,6 +152,7 @@ def compute_lcmvq_weights(
             jammer.azimuth_deg,
             jammer.elevation_deg,
             wavelength_m=lambda_jam_m,
+            database=database
         )
         steering_vectors.append(a_jam)
         # CAMBIO DEL DEPTH DB
@@ -164,6 +174,7 @@ def compute_weights(
     snapshot_matrix: np.ndarray,
     element_positions_m: np.ndarray,
     jammer_list: Sequence[JammerInstance],
+    database: MeasuredSteeringDatabase | None = None
 ) -> np.ndarray:
     """Selecciona el algoritmo de beamforming configurado y devuelve pesos.
 
@@ -179,7 +190,7 @@ def compute_weights(
     if algorithm == "power_inversion":
         return compute_power_inversion_weights(config, snapshot_matrix)
     if algorithm == "lcmv":
-        return compute_lcmv_weights(config, snapshot_matrix, element_positions_m, jammer_list)
+        return compute_lcmv_weights(config, snapshot_matrix, element_positions_m, jammer_list, database)
     if algorithm == "lcmvq":
-        return compute_lcmvq_weights(config, element_positions_m, jammer_list)
+        return compute_lcmvq_weights(config, element_positions_m, jammer_list, database)
     raise ValueError(f"Algoritmo no soportado: {algorithm}")
